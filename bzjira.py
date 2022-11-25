@@ -41,6 +41,9 @@ def print_issues(output_format, issues):
     for issue in issues:
         print(output_format.format(**issue))
 
+def print_raw_issues(issues):
+    print(json.dumps(issues, sort_keys=True, indent=4))
+
 def get_jql_from_url(url) -> str:
     url_parsed = urllib.parse.urlparse(url)
     jql = ''
@@ -82,7 +85,10 @@ def cmd_query(args):
     else:
         output_format = DEFAULT_OUTPUT
 
-    print_issues(output_format, output)
+    if args.raw:
+        print_raw_issues(output)
+    else:
+        print_issues(output_format, output)
 
 def cmd_create(args):
     print("not implemented yet")
@@ -118,6 +124,7 @@ def cmd_update(args):
             else:
                 print(f'ERROR: Issue {issue} NOT updated.')
 
+
 def main() -> int:
     """Main program entry that parses args"""
 
@@ -131,6 +138,8 @@ def main() -> int:
                         help='Use full URL as an argument')
     parser_query.add_argument('--jql', dest='jql',
                         help='Use JQL query')
+    parser_query.add_argument('--raw', action='store_true',
+                        help='Display raw issue data (JSON)')
     parser_query.add_argument('--start_at', dest='start_at', default=0, help='Pagination, start at which item in the output of a single query')
     parser_query.add_argument('--max_results', dest='max_results', default=DEFAULT_MAX_RESULTS, help='Pagination, how many items in the output of a single query, not counting individually requested IDs')
 
