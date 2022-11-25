@@ -45,17 +45,22 @@ def print_issues(output_format, issues):
 def print_raw_issues(issues):
     print(json.dumps(issues, sort_keys=True, indent=4))
 
-def cmd_fields_mapping(args):
-    mapping={}
+def get_file_content(filename):
+    with open(filename) as f:
+        return f.readlines()
+
+def get_fields_mapping(project, issue_type, only_required=False):
+    mapping = {}
     headers = get_headers()
-    r = requests.get(f"{JIRA_REST_URL}/issue/createmeta?projectKeys={args.project}&issuetypeNames={args.type}&expand=projects.issuetypes.fields", headers=headers)
+    r = requests.get(f"{JIRA_REST_URL}/issue/createmeta?projectKeys={project}&issuetypeNames={issue_type}&expand=projects.issuetypes.fields", headers=headers)
     data = r.json()
     try:
         for key in data['projects'][0]['issuetypes'][0]['fields']:
-            mapping[key] = data['projects'][0]['issuetypes'][0]['fields'][key]['name']
+            if data['projects'][0]['issuetypes'][0]['fields'][key]['required'] or not only_required:
+                mapping[key] = data['projects'][0]['issuetypes'][0]['fields'][key]['name']
     except IndexError:
-        error(f'Data not found. It is possible that project {args.project} has no issue type {args.type}.')
-    print(json.dumps(mapping, sort_keys=True, indent=4))
+        error(f'Data not found. It is possible that project {project} has no issue type {issue_type}.')
+    return mapping
 
 def get_jql_from_url(url) -> str:
     url_parsed = urllib.parse.urlparse(url)
@@ -68,6 +73,10 @@ def get_jql_from_url(url) -> str:
                 # not sure how we can only encode the value
                 jql = url_query[1]
     return jql
+
+def cmd_fields_mapping(args):
+    mapping = get_fields_mapping(args.project, args.issue_type, args.only_required)
+    print(json.dumps(mapping, sort_keys=True, indent=4))
 
 def cmd_query(args):
     output=[]
@@ -104,7 +113,41 @@ def cmd_query(args):
         print_issues(output_format, output)
 
 def cmd_create(args):
-    print("not implemented yet")
+    """
+    We need to get some JSON structure like this:
+    {
+       "fields": {
+          "project":
+          {
+             "key": "TEST"
+          },
+          "summary": "REST ye merry gentlemen.",
+          "description": "Creating of an issue using project keys and issue type names using the REST API",
+          "issuetype": {
+             "name": "Bug"
+          }
+       }
+    }
+    """
+    headers = get_headers()
+    mapping = get_fields_mapping(args.project, args.issue_type, True)
+    if args.json:
+        input_json = json.loads(args.json)
+    elif args.json_file:
+        input_json = json.load(args.json_file)
+    else:
+        input_fields = {'project': {'key': args.project}}
+        try:
+            input_fields['summary'] = args.summary
+        except AttributeError:
+            error("Summary field is compulsory")
+        if (not args.description and not args.description_file) or (args.description and args.description_file):
+            error("Specify either --description or --description_file, but not both")
+        input_fields['description'] = args.description or get_file_content(args.description_file)
+        input_json = json.dumps({'fields': input_fields}, sort_keys=True, indent=4)
+    print(input_json)
+    #r=requests.post(f"{JIRA_REST_URL}/issue", json=input_json, headers=headers)
+
 
 def cmd_update(args):
     """
@@ -124,7 +167,6 @@ def cmd_update(args):
     query={"update":{"labels":[{"add":"jira-bugzilla-resync"}]}}
     r=requests.put(f"{JIRA_REST_URL}/issue/RHELPLAN-95816", json=query, headers=headers, verify=False)
     """
-    print("not implemented yet")
     headers = get_headers()
     query = json.loads(args.json)
     if args.id:
@@ -178,6 +220,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(prog=program_name, description=description, formatter_class=argparse.RawDescriptionHelpFormatter)
     subparsers = parser.add_subparsers(help='commands')
 
+    # query command
     parser_query = subparsers.add_parser('query', help='query JIRA issues')
     parser_query.add_argument('-j', '--id', '--jira_id', metavar='ID', type=str, nargs='+',
                               help='Jira issues ID')
@@ -195,9 +238,20 @@ def main() -> int:
                         help='Print output in the form given. Use str.format string with {key} or {field["duedate"]} syntax. Use --json to see what keys exist.')
     parser_query.set_defaults(func=cmd_query)
 
+    # new command
     parser_new = subparsers.add_parser('new', help='create a new JIRA issue')
     parser_new.set_defaults(func=cmd_create)
+    parser_new.add_argument('--json', action='store_true',
+                            help='Input raw issue data (JSON)')
+    parser_new.add_argument('--json_file',
+                            help='Input raw issue data from a JSON file')
+    parser_new.add_argument('--project', default='RHEL', help='Which project to show fields for (default RHEL)')
+    parser_new.add_argument('--issue_type', default='Bug', help='Which issue type do we want to see fields for (default Bug)')
+    parser_new.add_argument('--summary', help='A short summary of the issue (must be set if we specify fields separately)')
+    parser_new.add_argument('--description', help='Longer description of the issue (either this or description_file must be set if we specify fields separately)')
+    parser_new.add_argument('--description_file', help='Longer description of the issue located in a file (either this or description must be set if we specify fields separately)')
 
+    # update command
     parser_update = subparsers.add_parser('update', help='update a JIRA issue')
     parser_update.set_defaults(func=cmd_update)
     parser_update.add_argument('-j', '--id', '--jira_id', metavar='ID', type=str, nargs='+',
@@ -209,7 +263,8 @@ def main() -> int:
     parser_fields_mapping = subparsers.add_parser('fields-mapping', help='show fields mapping for a project')
     parser_fields_mapping.set_defaults(func=cmd_fields_mapping)
     parser_fields_mapping.add_argument('--project', default='RHEL', help='Which project to show fields for (default RHEL)')
-    parser_fields_mapping.add_argument('--type', default='Bug', help='Which issue type do we want to see fields for (default Bug)')
+    parser_fields_mapping.add_argument('--issue_type', default='Bug', help='Which issue type do we want to see fields for (default Bug)')
+    parser_fields_mapping.add_argument('--only_required', action='store_true', help='Print only required fields')
 
     if len(sys.argv) <= 1:
         sys.argv.append('--help')
