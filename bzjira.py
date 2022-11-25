@@ -8,6 +8,7 @@ import codecs # for decoding escapte characters
 import urllib
 import pprint
 import json
+import textwrap
 
 JIRA_PROJECTS_URL = "https://issues.redhat.com"
 JIRA_REST_URL = f"{JIRA_PROJECTS_URL}/rest/api/2"
@@ -47,10 +48,13 @@ def print_raw_issues(issues):
 def cmd_fields_mapping(args):
     mapping={}
     headers = get_headers()
-    r = requests.get(f"{JIRA_REST_URL}/issue/createmeta?projectKeys={args.product}&issuetypeNames=Bug&expand=projects.issuetypes.fields", headers=headers)
+    r = requests.get(f"{JIRA_REST_URL}/issue/createmeta?projectKeys={args.product}&issuetypeNames={args.type}&expand=projects.issuetypes.fields", headers=headers)
     data = r.json()
-    for key in data['projects'][0]['issuetypes'][0]['fields']:
-        mapping[key] = data['projects'][0]['issuetypes'][0]['fields'][key]['name']
+    try:
+        for key in data['projects'][0]['issuetypes'][0]['fields']:
+            mapping[key] = data['projects'][0]['issuetypes'][0]['fields'][key]['name']
+    except IndexError:
+        error(f'Data not found. It is possible that product {args.product} has no issue type {args.type}.')
     print(json.dumps(mapping, sort_keys=True, indent=4))
 
 def get_jql_from_url(url) -> str:
@@ -136,8 +140,42 @@ def cmd_update(args):
 
 def main() -> int:
     """Main program entry that parses args"""
+    program_name = 'bzjira'
+    description=textwrap.dedent('''\
+        Work with JIRA from cmd-line like you liked doing it with python-bugzilla-cli.
+        ------------------------------------------------------------------------------
+          When working with the tool, check what fields exist in a project you work with.
+          Jira is masively configurable, so many fields are available under customfield_12345 name.
 
-    parser = argparse.ArgumentParser(description='Work with JIRA from cmd-line like with python-bugzilla-cli.')
+          Query JIRA issues:
+            You can query issues by ID, JQL or URL (from which we usually extract JQL anyway).
+            For stored filters, you can easily use filter=<i> as JQL or part of JQL.
+            Results are paginated.
+
+            Examples:
+              {program_name} query --jql 'project = RHELPLAN' --max_results 100 --start_at 200
+              {program_name} query --from-url 'https://issues.redhat.com/issues/?jql=project%20%3D%20%22RHEL%20Planning%22%20and%20issueLinkType%20%3D%20clones%20'
+              {program_name} query --jql 'filter=12363088'
+
+          Updating JIRA issues:
+            Consider reading "Updating an Issue via the JIRA REST APIs" section of the Jira API:
+            https://developer.atlassian.com/server/jira/platform/updating-an-issue-via-the-jira-rest-apis-6848604/
+
+            Examples:
+              {program_name} update -j RHELPLAN-95816 --json ' { "fields": { "summary": "rebuild of nodejs-12-container 8.4.z" } }'
+              {program_name} update -j RHELPLAN-95816 --json ' {"update": { "labels": [ {"add": "mynewlabel"} ] } }'
+              {program_name} update -j RHELPLAN-95816 --json ' {"update": { "labels": [ {"remove": "mynewlabel"} ] } }'
+
+          Creating JIRA issues:
+            Not implemented yet.
+
+            Examples:
+              TBD
+        ''')
+    # do not expand anything else than the program name, complicated format
+    # would make issues when using f-strings or .format()
+    description=description.replace('{program_name}', program_name)
+    parser = argparse.ArgumentParser(prog=program_name, description=description, formatter_class=argparse.RawDescriptionHelpFormatter)
     subparsers = parser.add_subparsers(help='commands')
 
     parser_query = subparsers.add_parser('query', help='query JIRA issues')
@@ -170,6 +208,7 @@ def main() -> int:
     parser_fields_mapping = subparsers.add_parser('fields-mapping', help='show fields mapping for a project')
     parser_fields_mapping.set_defaults(func=cmd_fields_mapping)
     parser_fields_mapping.add_argument('--product', default='RHEL', help='Which product to show fields for (default RHEL)')
+    parser_fields_mapping.add_argument('--type', default='Bug', help='Which issue type do we want to see fields for (default Bug)')
 
     if len(sys.argv) <= 1:
         sys.argv.append('--help')
