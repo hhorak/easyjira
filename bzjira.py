@@ -44,6 +44,15 @@ def print_issues(output_format, issues):
 def print_raw_issues(issues):
     print(json.dumps(issues, sort_keys=True, indent=4))
 
+def cmd_fields_mapping(args):
+    mapping={}
+    headers = get_headers()
+    r = requests.get(f"{JIRA_REST_URL}/issue/createmeta?projectKeys={args.product}&issuetypeNames=Bug&expand=projects.issuetypes.fields", headers=headers)
+    data = r.json()
+    for key in data['projects'][0]['issuetypes'][0]['fields']:
+        mapping[key] = data['projects'][0]['issuetypes'][0]['fields'][key]['name']
+    print(json.dumps(mapping, sort_keys=True, indent=4))
+
 def get_jql_from_url(url) -> str:
     url_parsed = urllib.parse.urlparse(url)
     jql = ''
@@ -157,6 +166,10 @@ def main() -> int:
                                help='Jira issues ID')
     parser_update.add_argument('--json', metavar='json', type=str, required = True,
                                help='JSON that defines what should be changed. See "Updating an Issue via the JIRA REST APIs" section of the Jira API: https://developer.atlassian.com/server/jira/platform/updating-an-issue-via-the-jira-rest-apis-6848604/')
+
+    parser_fields_mapping = subparsers.add_parser('fields-mapping', help='show fields mapping for a project')
+    parser_fields_mapping.set_defaults(func=cmd_fields_mapping)
+    parser_fields_mapping.add_argument('--product', default='RHEL', help='Which product to show fields for (default RHEL)')
 
     if len(sys.argv) <= 1:
         sys.argv.append('--help')
