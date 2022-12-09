@@ -137,11 +137,10 @@ def cmd_create(args):
         input_json = json.load(args.json_file)
     else:
         input_fields = {'project': {'key': args.project}}
-        try:
-            input_fields['summary'] = args.summary
-        except AttributeError:
+        if not args.summary:
             error("Summary field is compulsory")
-        if (not args.description and not args.description_file) or (args.description and args.description_file):
+        input_fields['summary'] = args.summary
+        if (args.description and args.description_file):
             error("Specify either --description or --description_file, but not both")
         input_fields['description'] = args.description or get_file_content(args.description_file)
         input_json = json.dumps({'fields': input_fields}, sort_keys=True, indent=4)
