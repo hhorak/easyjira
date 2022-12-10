@@ -1,0 +1,58 @@
+= Querying Jira issues
+
+There are several ways to get data about several issues from Jira, see https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-search/#api-rest-api-3-search-get
+
+For `{JIRA_REST_URL}` and `headers` specification, check xref:restapi.adoc[Rest API] section.
+
+== Query based on JQL
+
+=== bzjira example
+
+// test_case usage
+// test_case reads the first line and checks output that is the rest
+[,bash]
+----
+bzjira query --jql 'project = RHELPLAN' --max_results 100 --start_at 200
+RHELPLAN-10002
+----
+
+=== Rest API example
+
+// test_case rest api call
+// test_case stores request call in this format via mocking and compares the params and request made
+[,python]
+----
+params = jql=project%20=%20RHELPLAN&maxResults=100&startAt=200
+response = requests.get(f"{JIRA_REST_URL}/search", params=params, headers=headers)
+output = response.json()
+----
+
+==== Example response (shortened)
+
+// test_case response
+// test_case reads the response from here during mocking
+[,json]
+----
+{
+  "total": 2,
+  "issues": [
+    {
+      "id": "100026",
+      "key": "RHELPLAN-10002",
+      "fields": {
+        "description": "This is a description of the issue",
+        "summary": "First issue"
+      }
+    },
+    {
+      "id": "100027",
+      "key": "RHELPLAN-10003",
+      "fields": {
+        "description": "This is a description of another issue",
+        "summary": "Second issue"
+      }
+    }
+  ]
+}
+----
+
