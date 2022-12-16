@@ -38,6 +38,10 @@ def get_auth_data() -> dict:
 def get_headers() -> dict:
     return get_auth_data()
 
+# TODO:
+def _log_request(url, method, params):
+    pass
+
 def _print_issue(output_format, issue):
     print(output_format.format(**issue))
 
@@ -332,6 +336,9 @@ def main() -> int:
     description=description.replace('{program_name}', program_name)
     parser = argparse.ArgumentParser(prog=program_name, description=description, formatter_class=argparse.RawDescriptionHelpFormatter)
     subparsers = parser.add_subparsers(help='commands')
+    parser.add_argument('--show-api-calls', action='store_true', help='Show what API calls the tool performed and with what input. The output is printed to stderr.')
+    parser.add_argument('--simulate', action='store_true', help='Do not proceed with the API calls, only show what the tool would do.')
+    parser.add_argument('--debug', action='store_true', help='Show very verbose log of what the tool does.')
 
     # query command
     parser_query = subparsers.add_parser('query', help='query JIRA issues')
