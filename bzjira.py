@@ -244,6 +244,46 @@ def _replace_re(original_value, key, args):
             return re.sub(replace_data[key]['pattern'], replace_data[key]['replacement'], original_value)
     return original_value
 
+def _get_link_data(link_type, issue):
+    link_data = {
+        "clones": {
+          "name": "Cloners",
+          "inward":"is cloned by",
+          "outward":"clones"
+          },
+        "blocks": {
+          "name": "Blocks",
+          "inward": "is blocked by",
+          "outward": "blocks",
+          },
+        "depends on": {
+          "name": "Depend",
+          "inward": "is depended on by",
+          "outward": "depends on",
+          },
+        "duplicates": {
+          "name": "Duplicate",
+          "inward": "is duplicated by",
+          "outward": "duplicates",
+          }
+        }
+
+    if link_type in link_data:
+        type_data = link_data[link_type]
+    else:
+        error(f"Error: link_type {link_type} not recognized. Pick one of: " + ','.join(link_data.keys()))
+
+    link_data = {
+        "add": {
+          "type": type_data,
+            "outwardIssue": {
+              "key": issue
+            }
+          }
+        }
+
+    return link_data
+
 def cmd_clone(args):
     """
     Clone an issue with some logic for keeping, changing and removing some specific fields.
@@ -271,20 +311,7 @@ def cmd_clone(args):
     # add a link to the original
     if not args.no_link_back:
         clon_data["update"] = {
-          "issuelinks": [
-            {
-              "add":{
-                "type":{
-                  "name":"Cloners",
-                  "inward":"is cloned by",
-                  "outward":"clones"
-                  },
-              "outwardIssue":{
-                "key": args.id
-                }
-              }
-            }
-          ]
+          "issuelinks": [ _get_link_data('clones', args.id) ]
         }
 
     _create_issue(clon_data, args)
