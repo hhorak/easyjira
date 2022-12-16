@@ -9,10 +9,15 @@ import urllib
 import pprint
 import json
 import textwrap
+import getpass
+import re
 
+PROGRAM_NAME = 'bzjira'
 JIRA_PROJECTS_URL = "https://issues.redhat.com"
 JIRA_REST_URL = f"{JIRA_PROJECTS_URL}/rest/api/2"
 DEFAULT_MAX_RESULTS = 20
+TOKEN_PATH = os.path.expanduser("~/.config/jira/" + PROGRAM_NAME)
+TOKEN = None
 
 DEFAULT_OUTPUT="{key}"
 
@@ -21,11 +26,23 @@ def error(message):
     exit(1)
 
 def get_token() -> str:
+    global TOKEN
+    if TOKEN:
+        return TOKEN
     try:
-        token = os.environ['JIRA_TOKEN']
+        TOKEN = get_file_content(TOKEN_PATH)
+        return TOKEN
+    except FileNotFoundError:
+        print(f'Configuration file {TOKEN_PATH} not found')
+
+    try:
+        TOKEN = os.environ['JIRA_TOKEN']
+        return TOKEN
     except KeyError:
-        error("JIRA_TOKEN environment variable missing, create one in Jira UX")
-    return token
+        print("JIRA_TOKEN environment variable missing")
+
+    error(f'All attempts to get a JIRA token failed. Create one in Jira UX and put it to {TOKEN_PATH} file using {PROGRAM_NAME} access --configure, or set it as JIRA_TOKEN environment variable.')
+    return None
 
 def get_auth_data() -> dict:
     token = get_token()
@@ -54,7 +71,7 @@ def _print_raw_issues(issues):
 
 def get_file_content(filename):
     with open(filename) as f:
-        return f.readlines()
+        return '\n'.join(f.readlines())
 
 def _get_issue(issue, headers=None):
     if not headers:
@@ -92,29 +109,32 @@ def cmd_fields_mapping(args):
     mapping = get_fields_mapping(args.project, args.issue_type, args.only_required)
     print(json.dumps(mapping, sort_keys=True, indent=4))
 
-def cmd_query(args):
+def _get_issues(ids=None, from_url=None, jql=None, max_results=None, start_at=None):
     output=[]
     
     # get issues based on ID
     headers = get_headers()
-    if args.id:
-        for issue in args.id:
+    if ids:
+        for issue in ids:
             output.append(_get_issue(issue, headers=headers))
             #r=requests.get(f"{JIRA_REST_URL}/issue/{issue}", headers=headers)
             #output.append(r.json())
 
     # get issues based on url with a query
-    if args.from_url:
-        args.jql = get_jql_from_url(args.from_url)
-    #r=requests.post(f"{JIRA_REST_URL}/search", json=args.from_url, headers=headers, verify=False)
-    #output.append(r.json())
+    if from_url:
+        jql = get_jql_from_url(from_url)
 
     # get issues based on jql only
-    if args.jql:
-        query = urllib.parse.urlencode([('jql',args.jql), ('maxResults', args.max_results), ('startAt', args.start_at)])
+    if jql:
+        query = urllib.parse.urlencode([('jql',jql), ('maxResults', max_results), ('startAt', start_at)])
         r=requests.get(f"{JIRA_REST_URL}/search", params=query, headers=headers)
         if r.ok:
             output += r.json()['issues']
+
+    return output
+
+def cmd_query(args):
+    output = _get_issues(args.id, args.from_url, args.jql, args.max_results, args.start_at)
 
     if args.output_format:
         # use codecs to interpret escape characters
@@ -217,6 +237,13 @@ def cmd_update(args):
             print(f'Issue {issue} being updated with: {query}')
             _update_issue(issue, query)
 
+def _replace_re(original_value, key, args):
+    if args.re:
+        replace_data = json.loads(args.re)
+        if key in replace_data:
+            return re.sub(replace_data[key]['pattern'], replace_data[key]['replacement'], original_value)
+    return original_value
+
 def cmd_clone(args):
     """
     Clone an issue with some logic for keeping, changing and removing some specific fields.
@@ -225,14 +252,23 @@ def cmd_clone(args):
     issue = args.id
     original = _get_issue(issue, headers=headers)
     original_fields = original['fields']
-    input_fields = {}
-    input_fields['summary'] = original_fields['summary']
-    input_fields['description'] = original_fields['description']
-    input_fields['project'] = original_fields['project']
-    input_fields['issuetype'] = original_fields['issuetype']
+
+    # start with what is set explicitly by --set
+    input_fields = json.loads(args.set) if args.set else {}
+
+    # get fields that must be replaced (whether they are replaced or not depends also on --re content)
+    fields_for_replace = ['summary', 'description']
+    for field in ['project', 'issuetype']:
+        if field not in input_fields:
+            fields_for_replace.append(field)
+
+    # copy or replace fields
+    for field in fields_for_replace + (args.copy_fields if args.copy_fields else []):
+        input_fields[field] = _replace_re(original_fields[field], field, args)
+
     clon_data = {'fields': input_fields}
     _create_issue(clon_data, args)
-    #pprint.pprint(clon)
+    #pprint.pprint(clon_data)
 
 
 def _get_transitions(issue):
@@ -285,9 +321,34 @@ def cmd_move(args):
             print(r.text)
 
 
+def cmd_access(args):
+    """
+    Checks access to the server by reading a known to exist issue and
+    verifying the returned value includes what it should.
+    """
+    global TOKEN
+    if args.configure:
+        token_dir = os.path.dirname(TOKEN_PATH)
+        if not os.path.exists(token_dir):
+            os.mkdir(token_dir, mode = 0o700)
+        else:
+            s = os.stat(token_dir)
+            if s.st_mode & 0o777 != 0o700:
+                error(f'Diretory {token_dir} must have 0700 permissions, so nobody else than the owner can read it')
+        print(f'Provide a token that will be stored to {TOKEN_PATH}:', end='')
+        TOKEN = getpass.getpass()
+        with open(TOKEN_PATH, "w") as f:
+            f.write(TOKEN)
+
+    issues = _get_issues(ids=['RHELPLAN-141790'])
+    if issues[0]['id'] != '14977200':
+        error('Failure: Access does not look good, at least reading RHELPLAN-141790 did not succeed.')
+    print(f'Access to the server {JIRA_PROJECTS_URL} looks good.')
+
+
 def main() -> int:
     """Main program entry that parses args"""
-    program_name = 'bzjira'
+    program_name = PROGRAM_NAME
     description=textwrap.dedent('''\
         Work with JIRA from cmd-line like you liked doing it with python-bugzilla-cli.
         ------------------------------------------------------------------------------
@@ -329,7 +390,14 @@ def main() -> int:
             This is similar to creating, the specified issue is fetched first, then we pick several fields to keep.
 
             Examples:
+              # Clone an issue with no changes
               {program_name} clone -j RHELPLAN-141789
+
+              # Clone an issue and set different issue type and change description using regexp
+              {program_name} clone -j RHELPLAN-141789 --set '{"issuetype": {"name": "Feature"}}' --re '{"description": {"pattern": "issue", "replacement": "bug"}}'
+
+              # Clone an issue and add a suffix to the summary
+              ./bzjira.py clone  -j RHELPLAN-141789  --re '{"summary": {"pattern": "$", "replacement": " cloned"}}'
         ''')
     # do not expand anything else than the program name, complicated format
     # would make issues when using f-strings or .format()
@@ -401,11 +469,13 @@ def main() -> int:
                                help='JSON that defines what should be changed by replacing the content entirely. Example: {"summary": "My new summary"}')
     parser_clone.add_argument('--re', metavar='json', type=str,
                                help='JSON that defines what should be changed using regexp. The value must be a dict with keys pattern and replacement. Example: {"summary": {"pattern": "<component>", "replacement": "newcomponent"}}')
-    parser_clone.add_argument('--no-link-back', action='store_true', help='Do not link back to the original issue (if not specified, the new issue is linked back to the original one using clonned relation)')
+    parser_clone.add_argument('--no-link-back', action='store_true', help='Do not link back to the original issue (if not specified, the new issue is linked back to the original one using cloned relation)')
     parser_clone.add_argument('--raw', action='store_true',
                         help='Display raw issue data (JSON)')
     parser_clone.add_argument('--outputformat', dest='output_format',
                         help='Print output in the form given. Use str.format string with {key} or {field["duedate"]} syntax. Use --json to see what keys exist.')
+    parser_clone.add_argument('--copy_fields', metavar='field', type=str, nargs='+',
+                              help='Fields to be copied from the original issue, can be specified multiple times. If combined with --re, regular expression replacement will be applied for those fields.')
 
     # move command
     parser_move = subparsers.add_parser('move', help='change a JIRA issue status')
@@ -424,6 +494,11 @@ def main() -> int:
     parser_fields_mapping.add_argument('--project', default='RHEL', help='Which project to show fields for (default RHEL)')
     parser_fields_mapping.add_argument('--issue_type', default='Bug', help='Which issue type do we want to see fields for (default Bug)')
     parser_fields_mapping.add_argument('--only_required', action='store_true', help='Print only required fields')
+
+    # access command
+    parser_access = subparsers.add_parser('access', help='verifies that the tool is able to access the server')
+    parser_access.set_defaults(func=cmd_access)
+    parser_access.add_argument('--configure', action='store_true', help='Configure access to the Jira server')
 
     if len(sys.argv) <= 1:
         sys.argv.append('--help')
