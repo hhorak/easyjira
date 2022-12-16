@@ -238,11 +238,16 @@ def cmd_update(args):
             _update_issue(issue, query)
 
 def _replace_re(original_value, key, args):
+    if args.set:
+        set_data = json.loads(args.set)
+    output = set_data[key] if key in set_data else original_value
     if args.re:
         replace_data = json.loads(args.re)
         if key in replace_data:
-            return re.sub(replace_data[key]['pattern'], replace_data[key]['replacement'], original_value)
-    return original_value
+            replace_data_key = replace_data[key] if type(replace_data[key]) == list else [replace_data[key]]
+            for repl in replace_data_key:
+                output = re.sub(repl['pattern'], repl['replacement'], output)
+    return output
 
 def _get_link_data(link_type, issue):
     link_data = {
@@ -314,8 +319,8 @@ def cmd_clone(args):
           "issuelinks": [ _get_link_data('clones', args.id) ]
         }
 
-    _create_issue(clon_data, args)
-    #pprint.pprint(clon_data)
+    #_create_issue(clon_data, args)
+    pprint.pprint(clon_data)
 
 
 def _get_transitions(issue):
@@ -422,6 +427,7 @@ def main() -> int:
               {program_name} update -j RHELPLAN-95816 --json '{"update": { "labels": [ {"remove": "mynewlabel"} ] } }'
               {program_name} update -j RHELPLAN-142727 --json '{"update": {"issuelinks": [{"add": {"outwardIssue": {"key": "RHELPLAN-141789"}, "type": {"inward": "is cloned by", "name": "Cloners", "outward": "clones"}}}]}}'
 
+
             Notes:
               Changing the issue type to sub-task seems to be not possible: https://jira.atlassian.com/browse/JRASERVER-33927
 
@@ -446,6 +452,10 @@ def main() -> int:
 
               # Clone an issue and set different issue type and change description using regexp
               {program_name} clone -j RHELPLAN-141789 --set '{"issuetype": {"name": "Feature"}}' --re '{"description": {"pattern": "issue", "replacement": "bug"}}'
+
+              # clone RHEL 8 PRP template
+              {program_name} clone  -j RHELPLAN-27509  --re '{"summary": {"pattern": "<package_name>", "replacement": "newfakecomponent"}, "description": [{"pattern": "<package_name>", "replacement": "newfakecomponent"}, {"pattern": "<the package to add>", "replacement": "newfakecomponent"}, {"pattern": "<a bugzilla bug ID>", "replacement": "12345678fake"}]}'
+              {program_name} clone  -j RHELPLAN-27509  --re '{"summary": {"pattern": "<package_name>", "replacement": "newfakecomponent"}}' --set '{"description": "{noformat}\nDISTRIBUTION BUG: 12345fake\nPACKAGE NAME: newfakecomponent\nPACKAGE TYPE: standalone\nPRODUCT: Red Hat Enterprise Linux 8\nPRODUCT VERSION: 8.8.0\nBUGZILLA REQUESTER: fakedevel@redhat.com\nACG LEVEL: 4\nQE CONTACT KERBEROS ID: fakeqe\nQE CONTACT RED HAT JIRA USERNAME: fakeqe@redhat.com\nQE CONTACT BUGZILLA: rhel-fake-subsystem-qe@redhat.com\nQE CONTACT IS A USER: NO\nUSER KERBEROS ID: fakedevel\nRED HAT JIRA USERNAME: fakedevel@redhat.com\nBUGZILLA ACCOUNT: fakedevel@redhat.com\n{noformat}"}'
 
               # Clone an issue and add a suffix to the summary
               ./bzjira.py clone  -j RHELPLAN-141789  --re '{"summary": {"pattern": "$", "replacement": " cloned"}}'
