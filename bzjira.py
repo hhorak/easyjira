@@ -422,6 +422,9 @@ def main() -> int:
               {program_name} update -j RHELPLAN-95816 --json '{"update": { "labels": [ {"remove": "mynewlabel"} ] } }'
               {program_name} update -j RHELPLAN-142727 --json '{"update": {"issuelinks": [{"add": {"outwardIssue": {"key": "RHELPLAN-141789"}, "type": {"inward": "is cloned by", "name": "Cloners", "outward": "clones"}}}]}}'
 
+            Notes:
+              Changing the issue type to sub-task seems to be not possible: https://jira.atlassian.com/browse/JRASERVER-33927
+
           Creating JIRA issues:
             Pick a project (RHEL is the default), specify summary and description and create an issue.
 
@@ -486,8 +489,6 @@ def main() -> int:
     parser_new.add_argument('--summary', help='A short summary of the issue (must be set if we specify fields separately)')
     parser_new.add_argument('--description', help='Longer description of the issue (either this or description_file must be set if we specify fields separately)')
     parser_new.add_argument('--description_file', help='Longer description of the issue located in a file (either this or description must be set if we specify fields separately)')
-    parser_new.add_argument('--link-subtask', help='Add a link to sub-task issue')
-    parser_new.add_argument('--link-parent', help='Add a link to the parent issue')
     parser_new.add_argument('--link-epic', help='Add an epic to the new issue')
     parser_new.add_argument('--raw', action='store_true',
                         help='Display raw issue data (JSON)')
