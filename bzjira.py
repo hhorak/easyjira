@@ -267,6 +267,26 @@ def cmd_clone(args):
         input_fields[field] = _replace_re(original_fields[field], field, args)
 
     clon_data = {'fields': input_fields}
+
+    # add a link to the original
+    if not args.no_link_back:
+        clon_data["update"] = {
+          "issuelinks": [
+            {
+              "add":{
+                "type":{
+                  "name":"Cloners",
+                  "inward":"is cloned by",
+                  "outward":"clones"
+                  },
+              "outwardIssue":{
+                "key": args.id
+                }
+              }
+            }
+          ]
+        }
+
     _create_issue(clon_data, args)
     #pprint.pprint(clon_data)
 
@@ -370,9 +390,10 @@ def main() -> int:
             https://developer.atlassian.com/server/jira/platform/updating-an-issue-via-the-jira-rest-apis-6848604/
 
             Examples:
-              {program_name} update -j RHELPLAN-95816 --json ' { "fields": { "summary": "rebuild of nodejs-12-container 8.4.z" } }'
-              {program_name} update -j RHELPLAN-95816 --json ' {"update": { "labels": [ {"add": "mynewlabel"} ] } }'
-              {program_name} update -j RHELPLAN-95816 --json ' {"update": { "labels": [ {"remove": "mynewlabel"} ] } }'
+              {program_name} update -j RHELPLAN-95816 --json '{"fields": { "summary": "rebuild of nodejs-12-container 8.4.z" } }'
+              {program_name} update -j RHELPLAN-95816 --json '{"update": { "labels": [ {"add": "mynewlabel"} ] } }'
+              {program_name} update -j RHELPLAN-95816 --json '{"update": { "labels": [ {"remove": "mynewlabel"} ] } }'
+              {program_name} update -j RHELPLAN-142727 --json '{"update": {"issuelinks": [{"add": {"outwardIssue": {"key": "RHELPLAN-141789"}, "type": {"inward": "is cloned by", "name": "Cloners", "outward": "clones"}}}]}}'
 
           Creating JIRA issues:
             Pick a project (RHEL is the default), specify summary and description and create an issue.
@@ -469,7 +490,7 @@ def main() -> int:
                                help='JSON that defines what should be changed by replacing the content entirely. Example: {"summary": "My new summary"}')
     parser_clone.add_argument('--re', metavar='json', type=str,
                                help='JSON that defines what should be changed using regexp. The value must be a dict with keys pattern and replacement. Example: {"summary": {"pattern": "<component>", "replacement": "newcomponent"}}')
-    parser_clone.add_argument('--no-link-back', action='store_true', help='Do not link back to the original issue (if not specified, the new issue is linked back to the original one using cloned relation)')
+    parser_clone.add_argument('--no_link_back', action='store_true', help='Do not link back to the original issue (if not specified, the new issue is linked back to the original one using cloned relation)')
     parser_clone.add_argument('--raw', action='store_true',
                         help='Display raw issue data (JSON)')
     parser_clone.add_argument('--outputformat', dest='output_format',
