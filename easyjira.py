@@ -1,5 +1,3 @@
-#!/bin/env python3
-
 import argparse
 import os
 import requests
@@ -14,7 +12,7 @@ import re
 
 class EasyJira:
     def __init__(self):
-        self.program_name = 'bzjira'
+        self.program_name = 'easyjira'
         self.JIRA_PROJECTS_URL = "https://issues.redhat.com"
         self.JIRA_REST_URL = f"{self.JIRA_PROJECTS_URL}/rest/api/2"
         self.DEFAULT_MAX_RESULTS = 20
@@ -492,7 +490,7 @@ class EasyJira:
                   {program_name} clone  -j RHELPLAN-27509  --re '{"summary": {"pattern": "<package_name>", "replacement": "newfakecomponent"}}' --set '{"description": "{noformat}\nDISTRIBUTION BUG: 12345fake\nPACKAGE NAME: newfakecomponent\nPACKAGE TYPE: standalone\nPRODUCT: Red Hat Enterprise Linux 8\nPRODUCT VERSION: 8.8.0\nBUGZILLA REQUESTER: fakedevel@redhat.com\nACG LEVEL: 4\nQE CONTACT KERBEROS ID: fakeqe\nQE CONTACT RED HAT JIRA USERNAME: fakeqe@redhat.com\nQE CONTACT BUGZILLA: rhel-fake-subsystem-qe@redhat.com\nQE CONTACT IS A USER: NO\nUSER KERBEROS ID: fakedevel\nRED HAT JIRA USERNAME: fakedevel@redhat.com\nBUGZILLA ACCOUNT: fakedevel@redhat.com\n{noformat}"}'
 
                   # Clone an issue and add a suffix to the summary
-                  ./bzjira.py clone  -j RHELPLAN-141789  --re '{"summary": {"pattern": "$", "replacement": " cloned"}}'
+                  {program_name} clone  -j RHELPLAN-141789  --re '{"summary": {"pattern": "$", "replacement": " cloned"}}'
             ''')
         # do not expand anything else than the program name, complicated format
         # would make issues when using f-strings or .format()
@@ -602,6 +600,3 @@ class EasyJira:
 
         return 0
 
-if __name__ == '__main__':
-    rj = EasyJira()
-    sys.exit(rj.main())
