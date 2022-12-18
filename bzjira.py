@@ -18,6 +18,7 @@ JIRA_REST_URL = f"{JIRA_PROJECTS_URL}/rest/api/2"
 DEFAULT_MAX_RESULTS = 20
 TOKEN_PATH = os.path.expanduser("~/.config/jira/" + PROGRAM_NAME)
 TOKEN = None
+PROGRAM_ARGS = None
 
 DEFAULT_OUTPUT="{key}"
 
@@ -48,16 +49,44 @@ def get_auth_data() -> dict:
     token = get_token()
     auth = {
             "Accept": "application/json",
-            "Authorization": "Bearer " + token
+            "Authorization": "Bearer {token}"
            }
+    global PROGRAM_ARGS
+    if PROGRAM_ARGS.show_api_calls:
+        print('import requests, pprint', file=sys.stderr)
+        print(_log_arg('headers', auth), file=sys.stderr)
+    # replace the token string after the header is logged to not leak token
+    auth["Authorization"] = auth["Authorization"].format(token=token)
     return auth
 
 def get_headers() -> dict:
     return get_auth_data()
 
-# TODO:
-def _log_request(url, method, params):
-    pass
+def _log_arg(arg_name, arg):
+    return f'{arg_name} = {arg}' if arg else f'{arg_name} = None'
+
+def _api_request(method, url, params=None, json=None):
+    global PROGRAM_ARGS
+    headers = get_headers()
+    log = []
+    if method == 'post':
+        log.append(_log_arg('json', json))
+        log.append(f'r = requests.post("{url}", json=json, headers=headers)')
+        result = requests.post(url, json=json, headers=headers)
+    elif method == 'put':
+        log.append(_log_arg('json', json))
+        log.append(f'r = requests.put("{url}", json=json, headers=headers)')
+        result = requests.put(url, json=json, headers=headers)
+    elif method == 'get':
+        log.append(_log_arg('params', params))
+        log.append(f'r = requests.get("{url}", params=params, headers=headers)')
+        result = requests.get(url, params=params, headers=headers)
+    else:
+        error(f'Error: Unsupported method for requests: {method}')
+    log.append('pprint.pprint(r.json())')
+    if PROGRAM_ARGS.show_api_calls:
+        print('\n'.join(log), file=sys.stderr)
+    return result
 
 def _print_issue(output_format, issue):
     print(output_format.format(**issue))
@@ -73,17 +102,13 @@ def get_file_content(filename):
     with open(filename) as f:
         return '\n'.join(f.readlines())
 
-def _get_issue(issue, headers=None):
-    if not headers:
-        headers = get_headers()
-
-    r = requests.get(f"{JIRA_REST_URL}/issue/{issue}", headers=headers)
+def _get_issue(issue):
+    r = _api_request('get', f"{JIRA_REST_URL}/issue/{issue}")
     return r.json()
 
 def get_fields_mapping(project, issue_type, only_required=False):
     mapping = {}
-    headers = get_headers()
-    r = requests.get(f"{JIRA_REST_URL}/issue/createmeta?projectKeys={project}&issuetypeNames={issue_type}&expand=projects.issuetypes.fields", headers=headers)
+    r = _api_request('get', f"{JIRA_REST_URL}/issue/createmeta?projectKeys={project}&issuetypeNames={issue_type}&expand=projects.issuetypes.fields")
     data = r.json()
     try:
         for key in data['projects'][0]['issuetypes'][0]['fields']:
@@ -113,12 +138,9 @@ def _get_issues(ids=None, from_url=None, jql=None, max_results=None, start_at=No
     output=[]
     
     # get issues based on ID
-    headers = get_headers()
     if ids:
         for issue in ids:
-            output.append(_get_issue(issue, headers=headers))
-            #r=requests.get(f"{JIRA_REST_URL}/issue/{issue}", headers=headers)
-            #output.append(r.json())
+            output.append(_get_issue(issue))
 
     # get issues based on url with a query
     if from_url:
@@ -127,7 +149,7 @@ def _get_issues(ids=None, from_url=None, jql=None, max_results=None, start_at=No
     # get issues based on jql only
     if jql:
         query = urllib.parse.urlencode([('jql',jql), ('maxResults', max_results), ('startAt', start_at)])
-        r=requests.get(f"{JIRA_REST_URL}/search", params=query, headers=headers)
+        r = _api_request('get', f"{JIRA_REST_URL}/search", params=query)
         if r.ok:
             output += r.json()['issues']
 
@@ -148,8 +170,7 @@ def cmd_query(args):
         _print_issues(output_format, output)
 
 def _create_issue(input_data, args):
-    headers = get_headers()
-    r=requests.post(f"{JIRA_REST_URL}/issue", json=input_data, headers=headers)
+    r = _api_request('post', f"{JIRA_REST_URL}/issue", json=input_data)
     if not r.ok:
         print(r.text)
         error('Issue NOT created.')
@@ -184,7 +205,6 @@ def cmd_create(args):
        }
     }
     """
-    headers = get_headers()
     mapping = get_fields_mapping(args.project, args.issue_type, True)
     if args.json:
         input_data = json.loads(args.json)
@@ -203,8 +223,7 @@ def cmd_create(args):
     _create_issue(input_data, args)
 
 def _update_issue(issue, query):
-    headers = get_headers()
-    r = requests.put(f"{JIRA_REST_URL}/issue/{issue}", json=query, headers=headers)
+    r = _api_request('put', f"{JIRA_REST_URL}/issue/{issue}", json=query)
     if r.ok:
         print(f'Issue {issue} updated.')
     else:
@@ -230,7 +249,6 @@ def cmd_update(args):
     query={"update":{"labels":[{"add":"jira-bugzilla-resync"}]}}
     r=requests.put(f"{JIRA_REST_URL}/issue/RHELPLAN-95816", json=query, headers=headers, verify=False)
     """
-    headers = get_headers()
     query = json.loads(args.json)
     if args.id:
         for issue in args.id:
@@ -293,9 +311,8 @@ def cmd_clone(args):
     """
     Clone an issue with some logic for keeping, changing and removing some specific fields.
     """
-    headers = get_headers()
     issue = args.id
-    original = _get_issue(issue, headers=headers)
+    original = _get_issue(issue)
     original_fields = original['fields']
 
     # start with what is set explicitly by --set
@@ -324,8 +341,7 @@ def cmd_clone(args):
 
 
 def _get_transitions(issue):
-    headers = get_headers()
-    r = requests.get(f"{JIRA_REST_URL}/issue/{issue}/transitions?expand=transitions.fields", headers=headers)
+    r = _api_request('get', f"{JIRA_REST_URL}/issue/{issue}/transitions?expand=transitions.fields")
     if r.ok:
         return r.json()['transitions']
 
@@ -351,13 +367,12 @@ def cmd_move(args):
     This requires transition id probably: https://issues.redhat.com/rest/api/2/issue/RHELPLAN-141790/transitions?expand=transitions.fields
     https://community.atlassian.com/t5/Jira-questions/Close-Jira-Issue-via-REST-API/qaq-p/1845399
     """
-    headers = get_headers()
     if (args.comment and args.comment_file):
         error("Specify either --comment or --comment_file, but not both")
     issue = args.id
     status = args.status
     input_data = _filter_transition_id(issue, status, args.resolution)
-    r = requests.post(f"{JIRA_REST_URL}/issue/{issue}/transitions", json=input_data, headers=headers)
+    r = _api_request('post', f"{JIRA_REST_URL}/issue/{issue}/transitions", json=input_data)
     if r.ok:
         print(f'Issue {issue} moved to {status}.')
     else:
@@ -365,7 +380,7 @@ def cmd_move(args):
         print(r.text)
     if args.comment or args.comment_file:
         comment_data = {'body': args.comment or get_file_content(args.comment_file)}
-        r = requests.post(f"{JIRA_REST_URL}/issue/{issue}/comment", json=comment_data, headers=headers)
+        r = _api_request('post', f"{JIRA_REST_URL}/issue/{issue}/comment", json=comment_data)
         if r.ok:
             print(f'Comment added to the issue {issue}.')
         else:
@@ -563,6 +578,8 @@ def main() -> int:
         sys.argv.append('--help')
 
     args = parser.parse_args()
+    global PROGRAM_ARGS
+    PROGRAM_ARGS = args
     args.func(args)
     
     return 0
