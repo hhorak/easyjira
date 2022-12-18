@@ -74,20 +74,25 @@ class EasyJira:
         if method == 'post':
             log.append(self._log_arg('json', json))
             log.append(f'r = requests.post("{url}", json=json, headers=headers)')
-            result = requests.post(url, json=json, headers=headers)
+            if not self._program_args.simulate:
+                result = requests.post(url, json=json, headers=headers)
         elif method == 'put':
             log.append(self._log_arg('json', json))
             log.append(f'r = requests.put("{url}", json=json, headers=headers)')
-            result = requests.put(url, json=json, headers=headers)
+            if not self._program_args.simulate:
+                result = requests.put(url, json=json, headers=headers)
         elif method == 'get':
             log.append(self._log_arg('params', params))
             log.append(f'r = requests.get("{url}", params=params, headers=headers)')
-            result = requests.get(url, params=params, headers=headers)
+            if not self._program_args.simulate:
+                result = requests.get(url, params=params, headers=headers)
         else:
             self._error(f'Error: Unsupported method for requests: {method}')
         log.append('pprint.pprint(r.json())')
-        if self._program_args.show_api_calls:
+        if self._program_args.simulate or self._program_args.show_api_calls:
             print('\n'.join(log), file=sys.stderr)
+        if self._program_args.simulate:
+            self._error(f'Simulating only, ending now.')
         return result
 
 
@@ -498,7 +503,7 @@ class EasyJira:
         parser = argparse.ArgumentParser(prog=self.program_name, description=description, formatter_class=argparse.RawDescriptionHelpFormatter)
         subparsers = parser.add_subparsers(help='commands')
         parser.add_argument('--show-api-calls', action='store_true', help='Show what API calls the tool performed and with what input. The output is printed to stderr.')
-        parser.add_argument('--simulate', action='store_true', help='Do not proceed with the API calls, only show what the tool would do.')
+        parser.add_argument('--simulate', action='store_true', help='Do not proceed with any API calls.')
         parser.add_argument('--debug', action='store_true', help='Show very verbose log of what the tool does.')
 
         # query command
