@@ -4,7 +4,7 @@ import argparse
 import os
 import requests
 import sys
-import codecs # for decoding escapte characters
+import codecs # for decoding escape characters
 import urllib
 import pprint
 import json
