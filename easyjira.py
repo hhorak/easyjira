@@ -76,7 +76,7 @@ class EasyJira:
 
 
     def _log_arg(self, arg_name, arg):
-        return f'{arg_name} = {arg}' if arg else f'{arg_name} = None'
+        return f'{arg_name} = "{arg}"' if arg else f'{arg_name} = None'
 
 
     def _api_request(self, method, url, params=None, json=None, fake_return=None):
@@ -84,22 +84,22 @@ class EasyJira:
         log = []
         if method == 'post':
             log.append(self._log_arg('json', json))
-            log.append(f'r = requests.post("{url}", json=json, headers=headers)')
+            log.append(f'response = requests.post("{url}", json=json, headers=headers)')
             if not self._program_args.simulate:
                 result = requests.post(url, json=json, headers=headers)
         elif method == 'put':
             log.append(self._log_arg('json', json))
-            log.append(f'r = requests.put("{url}", json=json, headers=headers)')
+            log.append(f'response = requests.put("{url}", json=json, headers=headers)')
             if not self._program_args.simulate:
                 result = requests.put(url, json=json, headers=headers)
         elif method == 'get':
             log.append(self._log_arg('params', params))
-            log.append(f'r = requests.get("{url}", params=params, headers=headers)')
+            log.append(f'response = requests.get("{url}", params=params, headers=headers)')
             if not self._program_args.simulate:
                 result = requests.get(url, params=params, headers=headers)
         else:
             self._error(f'Error: Unsupported method for requests: {method}')
-        log.append('pprint.pprint(r.json())')
+        log.append('pprint.pprint(response.json())')
         if self._program_args.simulate or self._program_args.show_api_calls:
             print('\n'.join(log), file=sys.stderr)
         if self._program_args.simulate:

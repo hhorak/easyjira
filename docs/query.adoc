@@ -12,7 +12,7 @@ For `{JIRA_REST_URL}` and `headers` specification, check xref:restapi.adoc[Rest 
 // test_case reads the first line and checks output that is the rest
 [,bash]
 ----
-bzjira query --jql 'project = RHELPLAN' --max_results 100 --start_at 200
+easyjira query --jql 'project=RHELPLAN' --max_results 100 --start_at 200
 RHELPLAN-10002
 ----
 
@@ -22,9 +22,9 @@ RHELPLAN-10002
 // test_case stores request call in this format via mocking and compares the params and request made
 [,python]
 ----
-params = "jql=project%20=%20RHELPLAN&maxResults=100&startAt=200"
-response = requests.get(f"{JIRA_REST_URL}/search", params=params, headers=headers)
-output = response.json()
+params = "jql=project%3DRHELPLAN&maxResults=100&startAt=200"
+response = requests.get("https://issues.redhat.com/rest/api/2/search", params=params, headers=headers)
+pprint.pprint(response.json())
 ----
 
 ==== Example response (shortened)
