@@ -10,6 +10,17 @@ import textwrap
 import getpass
 import re
 
+currentdir = os.path.dirname(os.path.realpath(__file__))
+fake_data_dir = currentdir + '/tests'
+
+class FakeResponse:
+    def __init__(self, text):
+        self.text = text
+    def ok(self):
+        return True
+    def json(self):
+        return self.text
+
 class EasyJira:
     def __init__(self):
         self.program_name = 'easyjira'
@@ -68,7 +79,7 @@ class EasyJira:
         return f'{arg_name} = {arg}' if arg else f'{arg_name} = None'
 
 
-    def _api_request(self, method, url, params=None, json=None):
+    def _api_request(self, method, url, params=None, json=None, fake_return=None):
         headers = self._get_headers()
         log = []
         if method == 'post':
@@ -92,6 +103,8 @@ class EasyJira:
         if self._program_args.simulate or self._program_args.show_api_calls:
             print('\n'.join(log), file=sys.stderr)
         if self._program_args.simulate:
+            if fake_return:
+                return FakeResponse(fake_return)
             self._error(f'Simulating only, ending now.')
         return result
 
@@ -228,7 +241,8 @@ class EasyJira:
         if args.json:
             input_data = json.loads(args.json)
         elif args.json_file:
-            input_data = json.load(args.json_file)
+            with open(args.json_file, 'r') as f:
+                input_data = json.load(f)
         else:
             input_fields = {'project': {'key': args.project}, 'issuetype': {'name': args.issue_type}}
             if not args.summary:
@@ -364,8 +378,13 @@ class EasyJira:
         pprint.pprint(clon_data)
 
 
+    def _get_fake_transitions(self):
+        with open(fake_data_dir + '/transitions.json', 'r') as f:
+            return json.load(f)
+
     def _get_transitions(self, issue):
-        r = self._api_request('get', f"{self.JIRA_REST_URL}/issue/{issue}/transitions?expand=transitions.fields")
+        fake_return = self._get_fake_transitions() if self._program_args.simulate else None
+        r = self._api_request('get', f"{self.JIRA_REST_URL}/issue/{issue}/transitions?expand=transitions.fields", fake_return = fake_return)
         if r.ok:
             return r.json()['transitions']
 
@@ -393,23 +412,23 @@ class EasyJira:
         """
         if (args.comment and args.comment_file):
             self._error("Specify either --comment or --comment_file, but not both")
-        issue = args.id
-        status = args.status
-        input_data = self._filter_transition_id(issue, status, args.resolution)
-        r = self._api_request('post', f"{self.JIRA_REST_URL}/issue/{issue}/transitions", json=input_data)
-        if r.ok:
-            print(f'Issue {issue} moved to {status}.')
-        else:
-            print(f'ERROR: Issue {issue} NOT transitioned.')
-            print(r.text)
-        if args.comment or args.comment_file:
-            comment_data = {'body': args.comment or self._get_file_content(args.comment_file)}
-            r = self._api_request('post', f"{self.JIRA_REST_URL}/issue/{issue}/comment", json=comment_data)
+        for issue in args.id:
+            status = args.status
+            input_data = self._filter_transition_id(issue, status, args.resolution)
+            r = self._api_request('post', f"{self.JIRA_REST_URL}/issue/{issue}/transitions", json=input_data)
             if r.ok:
-                print(f'Comment added to the issue {issue}.')
+                print(f'Issue {issue} moved to {status}.')
             else:
-                print(f'ERROR: Comment not added to the tissue {issue}.')
+                print(f'ERROR: Issue {issue} NOT transitioned.')
                 print(r.text)
+            if args.comment or args.comment_file:
+                comment_data = {'body': args.comment or self._get_file_content(args.comment_file)}
+                r = self._api_request('post', f"{self.JIRA_REST_URL}/issue/{issue}/comment", json=comment_data)
+                if r.ok:
+                    print(f'Comment added to the issue {issue}.')
+                else:
+                    print(f'ERROR: Comment not added to the tissue {issue}.')
+                    print(r.text)
 
 
     def cmd_access(self, args):
@@ -436,7 +455,7 @@ class EasyJira:
         print(f'Access to the server {self.JIRA_PROJECTS_URL} looks good.')
 
 
-    def main(self) -> int:
+    def main(self, fake_args=None) -> int:
         """Main program entry that parses args"""
         description=textwrap.dedent('''\
             Work with JIRA from cmd-line like you liked doing it with python-bugzilla-cli.
@@ -453,6 +472,7 @@ class EasyJira:
                   {program_name} query --jql 'project = RHELPLAN' --max_results 100 --start_at 200
                   {program_name} query --from-url 'https://issues.redhat.com/issues/?jql=project%20%3D%20%22RHEL%20Planning%22%20and%20issueLinkType%20%3D%20clones%20'
                   {program_name} query --jql 'filter=12363088'
+                  {program_name} query --jql 'parent = RHELPLAN-138763' --outputformat '{key}'
 
               Updating JIRA issues:
                 Consider reading "Updating an Issue via the JIRA REST APIs" section of the Jira API:
@@ -577,7 +597,7 @@ class EasyJira:
         parser_move = subparsers.add_parser('move', help='change a JIRA issue status')
         parser_move.set_defaults(func=self.cmd_move)
         # so far limiting to a single issue
-        parser_move.add_argument('-j', '--id', '--jira_id', metavar='ID', type=str,
+        parser_move.add_argument('-j', '--id', '--jira_id', metavar='ID', type=str, nargs='+', required = True,
                                    help='Jira issues ID')
         parser_move.add_argument('--comment', help='Longer comment to be added to the issue')
         parser_move.add_argument('--comment_file', help='Longer comment to be added to issue located in a file')
@@ -599,7 +619,7 @@ class EasyJira:
         if len(sys.argv) <= 1:
             sys.argv.append('--help')
 
-        args = parser.parse_args()
+        args = parser.parse_args(args=fake_args) if fake_args else parser.parse_args()
         self._program_args = args
         args.func(args)
 
