@@ -1,0 +1,290 @@
+{
+    "expand": "transitions",
+    "transitions": [
+        {
+            "fields": {},
+            "id": "21",
+            "name": "In Progress",
+            "to": {
+                "description": "Work has started",
+                "iconUrl": "https://issues.redhat.com/images/icons/status_generic.gif",
+                "id": "10018",
+                "name": "In Progress",
+                "self": "https://issues.redhat.com/rest/api/2/status/10018",
+                "statusCategory": {
+                    "colorName": "yellow",
+                    "id": 4,
+                    "key": "indeterminate",
+                    "name": "In Progress",
+                    "self": "https://issues.redhat.com/rest/api/2/statuscategory/4"
+                }
+            }
+        },
+        {
+            "fields": {},
+            "id": "41",
+            "name": "New",
+            "to": {
+                "description": "Initial creation status. Implies nothing yet and should be very short lived; also can be a Bugzilla status.",
+                "iconUrl": "https://issues.redhat.com/images/icons/statuses/generic.png",
+                "id": "10016",
+                "name": "New",
+                "self": "https://issues.redhat.com/rest/api/2/status/10016",
+                "statusCategory": {
+                    "colorName": "blue-gray",
+                    "id": 2,
+                    "key": "new",
+                    "name": "To Do",
+                    "self": "https://issues.redhat.com/rest/api/2/statuscategory/2"
+                }
+            }
+        },
+        {
+            "fields": {},
+            "id": "51",
+            "name": "ASSIGNED",
+            "to": {
+                "description": "Bugzilla Status",
+                "iconUrl": "https://issues.redhat.com/images/icons/subtask.gif",
+                "id": "14452",
+                "name": "ASSIGNED",
+                "self": "https://issues.redhat.com/rest/api/2/status/14452",
+                "statusCategory": {
+                    "colorName": "yellow",
+                    "id": 4,
+                    "key": "indeterminate",
+                    "name": "In Progress",
+                    "self": "https://issues.redhat.com/rest/api/2/statuscategory/4"
+                }
+            }
+        },
+        {
+            "fields": {},
+            "id": "61",
+            "name": "POST",
+            "to": {
+                "description": "Bugzilla Status",
+                "iconUrl": "https://issues.redhat.com/images/icons/subtask.gif",
+                "id": "15726",
+                "name": "POST",
+                "self": "https://issues.redhat.com/rest/api/2/status/15726",
+                "statusCategory": {
+                    "colorName": "yellow",
+                    "id": 4,
+                    "key": "indeterminate",
+                    "name": "In Progress",
+                    "self": "https://issues.redhat.com/rest/api/2/statuscategory/4"
+                }
+            }
+        },
+        {
+            "fields": {},
+            "id": "71",
+            "name": "MODIFIED",
+            "to": {
+                "description": "Bugzilla Status",
+                "iconUrl": "https://issues.redhat.com/images/icons/subtask.gif",
+                "id": "14454",
+                "name": "MODIFIED",
+                "self": "https://issues.redhat.com/rest/api/2/status/14454",
+                "statusCategory": {
+                    "colorName": "yellow",
+                    "id": 4,
+                    "key": "indeterminate",
+                    "name": "In Progress",
+                    "self": "https://issues.redhat.com/rest/api/2/statuscategory/4"
+                }
+            }
+        },
+        {
+            "fields": {},
+            "id": "81",
+            "name": "ON_QA",
+            "to": {
+                "description": "Bugzilla Status",
+                "iconUrl": "https://issues.redhat.com/images/icons/subtask.gif",
+                "id": "15723",
+                "name": "ON_QA",
+                "self": "https://issues.redhat.com/rest/api/2/status/15723",
+                "statusCategory": {
+                    "colorName": "yellow",
+                    "id": 4,
+                    "key": "indeterminate",
+                    "name": "In Progress",
+                    "self": "https://issues.redhat.com/rest/api/2/statuscategory/4"
+                }
+            }
+        },
+        {
+            "fields": {},
+            "id": "91",
+            "name": "Release Pending",
+            "to": {
+                "description": "Work is complete but still not deployed or released to customers",
+                "iconUrl": "https://issues.redhat.com/images/icons/statuses/generic.png",
+                "id": "15735",
+                "name": "Release Pending",
+                "self": "https://issues.redhat.com/rest/api/2/status/15735",
+                "statusCategory": {
+                    "colorName": "green",
+                    "id": 3,
+                    "key": "done",
+                    "name": "Done",
+                    "self": "https://issues.redhat.com/rest/api/2/statuscategory/3"
+                }
+            }
+        },
+        {
+            "fields": {},
+            "id": "111",
+            "name": "Verified",
+            "to": {
+                "description": "Work has been verified to have the intended effect or behavior",
+                "iconUrl": "https://issues.redhat.com/images/icons/statuses/generic.png",
+                "id": "10015",
+                "name": "Verified",
+                "self": "https://issues.redhat.com/rest/api/2/status/10015",
+                "statusCategory": {
+                    "colorName": "green",
+                    "id": 3,
+                    "key": "done",
+                    "name": "Done",
+                    "self": "https://issues.redhat.com/rest/api/2/statuscategory/3"
+                }
+            }
+        },
+        {
+            "fields": {},
+            "id": "201",
+            "name": "Refinement",
+            "to": {
+                "description": "Work is being scoped and discussed (To Do status category; see also Draft)",
+                "iconUrl": "https://issues.redhat.com/images/icons/statuses/generic.png",
+                "id": "15021",
+                "name": "Refinement",
+                "self": "https://issues.redhat.com/rest/api/2/status/15021",
+                "statusCategory": {
+                    "colorName": "blue-gray",
+                    "id": 2,
+                    "key": "new",
+                    "name": "To Do",
+                    "self": "https://issues.redhat.com/rest/api/2/statuscategory/2"
+                }
+            }
+        },
+        {
+            "fields": {},
+            "id": "211",
+            "name": "ON_DEV",
+            "to": {
+                "description": "This status is managed internally by JIRA Software",
+                "iconUrl": "https://issues.redhat.com/images/icons/subtask.gif",
+                "id": "15727",
+                "name": "ON_DEV",
+                "self": "https://issues.redhat.com/rest/api/2/status/15727",
+                "statusCategory": {
+                    "colorName": "yellow",
+                    "id": 4,
+                    "key": "indeterminate",
+                    "name": "In Progress",
+                    "self": "https://issues.redhat.com/rest/api/2/statuscategory/4"
+                }
+            }
+        },
+        {
+            "fields": {
+                "resolution": {
+                    "allowedValues": [
+                        {
+                            "id": "1",
+                            "name": "Done",
+                            "self": "https://issues.redhat.com/rest/api/2/resolution/1"
+                        },
+                        {
+                            "id": "10000",
+                            "name": "Won't Do",
+                            "self": "https://issues.redhat.com/rest/api/2/resolution/10000"
+                        },
+                        {
+                            "id": "5",
+                            "name": "Cannot Reproduce",
+                            "self": "https://issues.redhat.com/rest/api/2/resolution/5"
+                        },
+                        {
+                            "id": "4",
+                            "name": "Can't Do",
+                            "self": "https://issues.redhat.com/rest/api/2/resolution/4"
+                        },
+                        {
+                            "id": "10700",
+                            "name": "Duplicate",
+                            "self": "https://issues.redhat.com/rest/api/2/resolution/10700"
+                        },
+                        {
+                            "id": "10802",
+                            "name": "Not a Bug",
+                            "self": "https://issues.redhat.com/rest/api/2/resolution/10802"
+                        },
+                        {
+                            "id": "10803",
+                            "name": "Done-Errata",
+                            "self": "https://issues.redhat.com/rest/api/2/resolution/10803"
+                        },
+                        {
+                            "id": "10804",
+                            "name": "MirrorOrphan",
+                            "self": "https://issues.redhat.com/rest/api/2/resolution/10804"
+                        },
+                        {
+                            "id": "10900",
+                            "name": "Obsolete",
+                            "self": "https://issues.redhat.com/rest/api/2/resolution/10900"
+                        },
+                        {
+                            "id": "11100",
+                            "name": "Test Pending",
+                            "self": "https://issues.redhat.com/rest/api/2/resolution/11100"
+                        },
+                        {
+                            "id": "11101",
+                            "name": "Fixed",
+                            "self": "https://issues.redhat.com/rest/api/2/resolution/11101"
+                        },
+                        {
+                            "id": "11102",
+                            "name": "Duplicate Ticket",
+                            "self": "https://issues.redhat.com/rest/api/2/resolution/11102"
+                        }
+                    ],
+                    "fieldId": "resolution",
+                    "name": "Resolution",
+                    "operations": [
+                        "set"
+                    ],
+                    "required": true,
+                    "schema": {
+                        "system": "resolution",
+                        "type": "resolution"
+                    }
+                }
+            },
+            "id": "221",
+            "name": "Closed",
+            "to": {
+                "description": "The issue is closed. See the resolution for context regarding why (for example Done, Abandoned, Duplicate, etc)",
+                "iconUrl": "https://issues.redhat.com/images/icons/statuses/closed.png",
+                "id": "6",
+                "name": "Closed",
+                "self": "https://issues.redhat.com/rest/api/2/status/6",
+                "statusCategory": {
+                    "colorName": "green",
+                    "id": 3,
+                    "key": "done",
+                    "name": "Done",
+                    "self": "https://issues.redhat.com/rest/api/2/statuscategory/3"
+                }
+            }
+        }
+    ]
+}
+
