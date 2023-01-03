@@ -299,8 +299,10 @@ class EasyJira:
 
     def _replace_re(self, original_value, key, args):
         if args.set:
-            set_data = json.loads(args.set)
-        output = set_data[key] if key in set_data else original_value
+            set_data = json.loads(args.set, strict=False)
+            output = set_data[key] if key in set_data else original_value
+        else:
+            output = original_value
         if args.re:
             replace_data = json.loads(args.re)
             if key in replace_data:
@@ -360,7 +362,7 @@ class EasyJira:
         original_fields = original['fields']
 
         # start with what is set explicitly by --set
-        input_fields = json.loads(args.set) if args.set else {}
+        input_fields = json.loads(args.set, strict=False) if args.set else {}
 
         # get fields that must be replaced (whether they are replaced or not depends also on --re content)
         fields_for_replace = ['summary', 'description']
@@ -380,8 +382,8 @@ class EasyJira:
               "issuelinks": [ self._get_link_data('clones', args.id) ]
             }
 
-        #self._create_issue(clon_data, args)
-        pprint.pprint(clon_data)
+        self._create_issue(clon_data, args)
+        # pprint.pprint(clon_data)
 
 
     def _get_fake_transitions(self):
