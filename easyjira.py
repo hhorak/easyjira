@@ -44,7 +44,7 @@ class EasyJira:
         if self._token:
             return self._token
         try:
-            self._token = self._get_file_content(self._token_path)
+            self._token = self._get_file_content(self._token_path).strip()
             return self._token
         except FileNotFoundError:
             print(f'Configuration file {self._token_path} not found')
