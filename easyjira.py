@@ -78,7 +78,11 @@ class EasyJira:
 
 
     def _log_arg(self, arg_name, arg):
-        return f'{arg_name} = "{arg}"' if arg else f'{arg_name} = None'
+        if not arg:
+            return f'{arg_name} = None'
+
+        enclosed_arg = f'"{arg}"' if isinstance(arg, str) else f'{arg}'
+        return f'{arg_name} = {enclosed_arg}'
 
 
     def _api_request(self, method, url, params=None, json=None, fake_return=None):
