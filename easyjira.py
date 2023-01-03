@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import argparse
 import os
 import requests
@@ -625,3 +627,7 @@ class EasyJira:
 
         return 0
 
+
+if __name__ == '__main__':
+    ej = EasyJira()
+    sys.exit(ej.main())
