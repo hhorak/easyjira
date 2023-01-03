@@ -55,7 +55,7 @@ class EasyJira:
         except KeyError:
             print("JIRA_TOKEN environment variable missing")
 
-        self._error(f'All attempts to get a JIRA token failed. Create one in Jira UX and put it to {self._token_path} file using {self.program_name} access --configure, or set it as JIRA_TOKEN environment variable.')
+        self._error(f'All attempts to get a JIRA token failed. Create one in the Jira web interface (see your Profile section) and save only the token string into a file located at {self._token_path}, or set it into the JIRA_TOKEN environment variable.')
         return None
 
 
