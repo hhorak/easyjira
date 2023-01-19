@@ -470,6 +470,12 @@ class EasyJira:
             ------------------------------------------------------------------------------
               When working with the tool, check what fields exist in a project you work with.
               Jira is masively configurable, so many fields are available under customfield_12345 name.
+              This tool is supposed to hide some of the specifics and is supposed to be an opiniated
+              tool for RHEL project specifically.
+
+              Another motivation for this tool is to help people working with Jira API to learn
+              the concepts easily, by showing how several basic operations done via CLI would
+              look like in a Python script (see the --simulate argument).
 
               Query JIRA issues:
                 You can query issues by ID, JQL or URL (from which we usually extract JQL anyway).
@@ -479,8 +485,8 @@ class EasyJira:
                 Examples:
                   {program_name} query --jql 'project = RHELPLAN' --max_results 100 --start_at 200
                   {program_name} query --from-url 'https://issues.redhat.com/issues/?jql=project%20%3D%20%22RHEL%20Planning%22%20and%20issueLinkType%20%3D%20clones%20'
-                  {program_name} query --jql 'filter=12363088'
                   {program_name} query --jql 'parent = RHELPLAN-138763' --outputformat '{key}'
+                  {program_name} --simulate query --jql 'filter=12363088'
 
               Updating JIRA issues:
                 Consider reading "Updating an Issue via the JIRA REST APIs" section of the Jira API:
@@ -520,7 +526,7 @@ class EasyJira:
 
                   # clone RHEL 8 PRP template
                   {program_name} clone  -j RHELPLAN-27509  --re '{"summary": {"pattern": "<package_name>", "replacement": "newfakecomponent"}, "description": [{"pattern": "<package_name>", "replacement": "newfakecomponent"}, {"pattern": "<the package to add>", "replacement": "newfakecomponent"}, {"pattern": "<a bugzilla bug ID>", "replacement": "12345678fake"}]}'
-                  {program_name} clone  -j RHELPLAN-27509  --re '{"summary": {"pattern": "<package_name>", "replacement": "newfakecomponent"}}' --set '{"description": "{noformat}\nDISTRIBUTION BUG: 12345fake\nPACKAGE NAME: newfakecomponent\nPACKAGE TYPE: standalone\nPRODUCT: Red Hat Enterprise Linux 8\nPRODUCT VERSION: 8.8.0\nBUGZILLA REQUESTER: fakedevel@redhat.com\nACG LEVEL: 4\nQE CONTACT KERBEROS ID: fakeqe\nQE CONTACT RED HAT JIRA USERNAME: fakeqe@redhat.com\nQE CONTACT BUGZILLA: rhel-fake-subsystem-qe@redhat.com\nQE CONTACT IS A USER: NO\nUSER KERBEROS ID: fakedevel\nRED HAT JIRA USERNAME: fakedevel@redhat.com\nBUGZILLA ACCOUNT: fakedevel@redhat.com\n{noformat}"}'
+                  {program_name} clone  -j RHELPLAN-27509  --re '{"summary": {"pattern": "<package_name>", "replacement": "newfakecomponent"}}' --set '{"description": "{noformat}\\nDISTRIBUTION BUG: 12345fake\\nPACKAGE NAME: newfakecomponent\\nPACKAGE TYPE: standalone\\nPRODUCT: Red Hat Enterprise Linux 8\\nPRODUCT VERSION: 8.8.0\\nBUGZILLA REQUESTER: fakedevel@redhat.com\\nACG LEVEL: 4\\nQE CONTACT KERBEROS ID: fakeqe\\nQE CONTACT RED HAT JIRA USERNAME: fakeqe@redhat.com\\nQE CONTACT BUGZILLA: rhel-fake-subsystem-qe@redhat.com\\nQE CONTACT IS A USER: NO\\nUSER KERBEROS ID: fakedevel\\nRED HAT JIRA USERNAME: fakedevel@redhat.com\\nBUGZILLA ACCOUNT: fakedevel@redhat.com\\n{noformat}"}'
 
                   # Clone an issue and add a suffix to the summary
                   {program_name} clone  -j RHELPLAN-141789  --re '{"summary": {"pattern": "$", "replacement": " cloned"}}'
