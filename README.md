@@ -1,4 +1,4 @@
-# bzjira
+# easyjira
 Jira cmd-line tool that looks like python bugzilla
 
 ## Jira Token

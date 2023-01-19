@@ -6,7 +6,7 @@ For `{JIRA_REST_URL}` and `headers` specification, check xref:restapi.adoc[Rest 
 
 == Query based on JQL
 
-=== bzjira example
+=== easyjira example
 
 // test_case usage
 // test_case reads the first line and checks output that is the rest
