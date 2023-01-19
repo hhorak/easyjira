@@ -5,5 +5,5 @@ import sys
 import easyjira
 
 if __name__ == '__main__':
-    rj = easyjira.EasyJira()
-    sys.exit(rj.main())
+    ej = easyjira.EasyJira()
+    sys.exit(ej.main())

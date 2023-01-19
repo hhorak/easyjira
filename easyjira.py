@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import argparse
 import os
 import requests
@@ -42,7 +44,7 @@ class EasyJira:
         if self._token:
             return self._token
         try:
-            self._token = self._get_file_content(self._token_path)
+            self._token = self._get_file_content(self._token_path).strip()
             return self._token
         except FileNotFoundError:
             print(f'Configuration file {self._token_path} not found')
@@ -53,7 +55,7 @@ class EasyJira:
         except KeyError:
             print("JIRA_TOKEN environment variable missing")
 
-        self._error(f'All attempts to get a JIRA token failed. Create one in Jira UX and put it to {self._token_path} file using {self.program_name} access --configure, or set it as JIRA_TOKEN environment variable.')
+        self._error(f'All attempts to get a JIRA token failed. Create one in the Jira web interface (see your Profile section) and save only the token string into a file located at {self._token_path}, or set it into the JIRA_TOKEN environment variable.')
         return None
 
 
@@ -76,7 +78,11 @@ class EasyJira:
 
 
     def _log_arg(self, arg_name, arg):
-        return f'{arg_name} = "{arg}"' if arg else f'{arg_name} = None'
+        if not arg:
+            return f'{arg_name} = None'
+
+        enclosed_arg = f'"{arg}"' if isinstance(arg, str) else f'{arg}'
+        return f'{arg_name} = {enclosed_arg}'
 
 
     def _api_request(self, method, url, params=None, json=None, fake_return=None):
@@ -293,8 +299,10 @@ class EasyJira:
 
     def _replace_re(self, original_value, key, args):
         if args.set:
-            set_data = json.loads(args.set)
-        output = set_data[key] if key in set_data else original_value
+            set_data = json.loads(args.set, strict=False)
+            output = set_data[key] if key in set_data else original_value
+        else:
+            output = original_value
         if args.re:
             replace_data = json.loads(args.re)
             if key in replace_data:
@@ -354,7 +362,7 @@ class EasyJira:
         original_fields = original['fields']
 
         # start with what is set explicitly by --set
-        input_fields = json.loads(args.set) if args.set else {}
+        input_fields = json.loads(args.set, strict=False) if args.set else {}
 
         # get fields that must be replaced (whether they are replaced or not depends also on --re content)
         fields_for_replace = ['summary', 'description']
@@ -374,8 +382,8 @@ class EasyJira:
               "issuelinks": [ self._get_link_data('clones', args.id) ]
             }
 
-        #self._create_issue(clon_data, args)
-        pprint.pprint(clon_data)
+        self._create_issue(clon_data, args)
+        # pprint.pprint(clon_data)
 
 
     def _get_fake_transitions(self):
@@ -625,3 +633,7 @@ class EasyJira:
 
         return 0
 
+
+if __name__ == '__main__':
+    ej = EasyJira()
+    sys.exit(ej.main())
