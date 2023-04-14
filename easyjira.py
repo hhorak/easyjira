@@ -138,18 +138,39 @@ class EasyJira:
         return r.json()
 
 
+    def _get_issue_types(self, project):
+        r = self._api_request('get', f"{self.JIRA_REST_URL}/issue/createmeta/{project}/issuetypes")
+        data = r.json()
+        result = {}
+        try:
+            result = {t['name']:t['id'] for t in data['values']}
+        except (KeyError, IndexError):
+            reason = 'unknown' if 'errorMessages' not in data else data['errorMessages'][0]
+            self._error(f'Issue types not found. It is possible that project {project} does not exist. Reason given by Jira: {reason}')
+        return result
+
     def _get_fields_mapping(self, project, issue_type, only_required=False):
+        issue_types = self._get_issue_types(project)
         mapping = {}
-        r = self._api_request('get', f"{self.JIRA_REST_URL}/issue/createmeta?projectKeys={project}&issuetypeNames={issue_type}&expand=projects.issuetypes.fields")
+        r = self._api_request('get', f"{self.JIRA_REST_URL}/issue/createmeta/{project}/issuetypes/{issue_types[issue_type]}")
         data = r.json()
         try:
-            for key in data['projects'][0]['issuetypes'][0]['fields']:
-                if data['projects'][0]['issuetypes'][0]['fields'][key]['required'] or not only_required:
-                    mapping[key] = data['projects'][0]['issuetypes'][0]['fields'][key]['name']
-        except IndexError:
-            self._error(f'Data not found. It is possible that project {project} has no issue type {issue_type}.')
+            mapping = { field['fieldId']:field['name'] for field in data['values'] if field['required'] or not only_required }
+        except (KeyError, IndexError):
+            reason = 'unknown' if 'errorMessages' not in data else data['errorMessages'][0]
+            self._error(f'Data not found. It is possible that project {project} has no issue type {issue_type}. Reason given by Jira: {reason}')
         return mapping
 
+    def _get_fields_mapping_for_issue(self, jira_id, only_required=False):
+        mapping = {}
+        r = self._api_request('get', f"{self.JIRA_REST_URL}/issue/{jira_id}/editmeta?expand=projects.issuetypes.fields")
+        data = r.json()
+        try:
+            mapping = { key:data['fields'][key]['name'] for key in data['fields'] if data['fields'][key]['required'] or not only_required }
+        except (KeyError, IndexError):
+            reason = 'unknown' if 'errorMessages' not in data else data['errorMessages'][0]
+            self._error(f'Data not found. It is possible that project {project} has no issue type {issue_type}. Reason given by Jira: {reason}')
+        return mapping
 
     def _get_jql_from_url(self, url) -> str:
         url_parsed = urllib.parse.urlparse(url)
@@ -165,7 +186,10 @@ class EasyJira:
 
 
     def cmd_fields_mapping(self, args):
-        mapping = self._get_fields_mapping(args.project, args.issue_type, args.only_required)
+        if args.id:
+            mapping = self._get_fields_mapping_for_issue(args.id, args.only_required)
+        else:
+            mapping = self._get_fields_mapping(args.project, args.issue_type, args.only_required)
         print(json.dumps(mapping, sort_keys=True, indent=4))
 
 
@@ -619,9 +643,10 @@ class EasyJira:
         parser_move.add_argument('--resolution', default='Done', help='Resolution of the closure (default: Done)')
 
         # fields-mapping command
-        parser_fields_mapping = subparsers.add_parser('fields-mapping', help='show fields mapping for a project')
+        parser_fields_mapping = subparsers.add_parser('fields-mapping', help='show fields mapping for a project and issue type (shows only fields available when creating a new issue) or specific issue (shows all fields)')
         parser_fields_mapping.set_defaults(func=self.cmd_fields_mapping)
         parser_fields_mapping.add_argument('--project', default='RHEL', help='Which project to show fields for (default RHEL)')
+        parser_fields_mapping.add_argument('-j', '--id', '--jira_id', metavar='ID', type=str, help='Jira issue ID')
         parser_fields_mapping.add_argument('--issue_type', default='Bug', help='Which issue type do we want to see fields for (default Bug)')
         parser_fields_mapping.add_argument('--only_required', action='store_true', help='Print only required fields')
 
