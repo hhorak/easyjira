@@ -11,7 +11,7 @@ Jira cmd-line tool that looks like python bugzilla
 ## Usage
 
 ```
-easyjira [-h] [--show-api-calls] [--simulate] [--debug] {query,new,update,clone,move,fields-mapping,access} ...
+usage: easyjira [-h] [--show-api-calls] [--simulate] [--debug] {query,new,update,clone,move,fields-mapping,access} ...
 
 Work with JIRA from cmd-line like you liked doing it with python-bugzilla-cli.
 ------------------------------------------------------------------------------
@@ -85,7 +85,7 @@ positional arguments:
     update              update a JIRA issue
     clone               clone a JIRA issue
     move                change a JIRA issue status
-    fields-mapping      show fields mapping for a project
+    fields-mapping      show fields mapping for a project and issue type (shows only fields available when creating a new issue) or specific issue (shows all fields)
     access              verifies that the tool is able to access the server
 
 options:
