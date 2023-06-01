@@ -18,7 +18,13 @@ etc..
 Story
 -----
 
-Now, when adopting Jira as the issue tracker platform for RHEL, I don't want to loose this ability. Yes, Jira webUI is able to edit several issues at once, but sometimes I want to connect the work with some more Bash scripting, or write some more advanced python script to make the work for me. When looking at existing jira clis, I didn't find one that would be simple and universal enough, and also would work with the Jira instance issues.redhat.com that we use. The RestAPI looked easy enough to be used with a token, but I soon found traps like status change is actually a transition, or need to have data in JSON format, which is not that easy to generate in Bash. Anyway, somewhere at this point I realized that I might create a new tool, that would help me to do both -- access Jira from a command-line (or Bash script) and if I'd need to write something more complex, the tool could help me to figure out how RestAPI calls look like.
+Now, when adopting Jira as the issue tracker platform for RHEL, I don't want to loose this ability.
+
+Yes, Jira webUI is able to edit several issues at once, but sometimes I want to connect the work with some more Bash scripting, or write some more advanced python script to make the work for me.
+
+When looking at existing jira CLI tools, I didn't find one that would be simple and universal enough, and also would work with the Jira instance issues.redhat.com that we use. The RestAPI looked easy enough to be used with a token, but I soon found traps like status change is actually a transition, or need to have data in JSON format, which is not that easy to generate in Bash.
+
+Anyway, somewhere at this point I realized that I might create a new tool, that would help me to do both -- access Jira from a command-line (or Bash script) and if I'd need to write something more complex, the tool could help me to figure out how RestAPI calls look like.
 
 To show this power, let's say I want to clone one issue, change the summary with a regular expression replacement and then close it. Try yourself how much time you spend on reading the Jira API documentation to make this happen. And now see how easy it can be achieved and that the tool might help you generate some python snippets that you can re-use for a more mature script:
 
