@@ -33,11 +33,40 @@ class EasyJira:
         self._token = None
         self._program_args = None
         self._default_output = "{key}"
+        self._log_headers_done = False
+        self._debug = False
 
+        self.link_data = {
+            "clones": {
+              "name": "Cloners",
+              "inward":"is cloned by",
+              "outward":"clones"
+              },
+            "blocks": {
+              "name": "Blocks",
+              "inward": "is blocked by",
+              "outward": "blocks",
+              },
+            "depends on": {
+              "name": "Depend",
+              "inward": "is depended on by",
+              "outward": "depends on",
+              },
+            "duplicates": {
+              "name": "Duplicate",
+              "inward": "is duplicated by",
+              "outward": "duplicates",
+              }
+            }
 
     def _error(self, message):
         print(message)
         exit(1)
+
+
+    def _debug_print(self, message):
+        if self._debug:
+            print(message)
 
 
     def _get_token(self) -> str:
@@ -65,9 +94,12 @@ class EasyJira:
                 "Accept": "application/json",
                 "Authorization": "Bearer {token}"
                }
-        if self._program_args.show_api_calls:
+        if self._program_args.show_api_calls and not self._log_headers_done:
+            print('#!/usr/bin/env python3', file=sys.stderr)
+            print('# Python 3 snippets that may help you write your script, do not use without proper review', file=sys.stderr)
             print('import requests, pprint', file=sys.stderr)
             print(self._log_arg('headers', auth), file=sys.stderr)
+            self._log_headers_done = True
         # replace the token string after the header is logged to not leak token
         auth["Authorization"] = auth["Authorization"].format(token=token)
         return auth
@@ -282,12 +314,26 @@ class EasyJira:
                 self._error("Specify either --description or --description_file, but not both")
             input_fields['description'] = args.description or self._get_file_content(args.description_file)
             input_data = {'fields': input_fields}
-        print(json.dumps(input_data, sort_keys=True, indent=4))
+        self._debug_print(json.dumps(input_data, sort_keys=True, indent=4))
         self._create_issue(input_data, args)
 
 
-    def _update_issue(self, issue, query):
-        r = self._api_request('put', f"{self.JIRA_REST_URL}/issue/{issue}", json=query)
+    def _process_query_links(self, input_data, args):
+        if args.link_type and args.link_issue:
+            # ensure we only add to existing fields that are created if not exist initially
+            if "update" not in input_data:
+                input_data["update"] = {}
+            if "issuelinks" not in input_data["update"]:
+                input_data["update"]["issuelinks"] = []
+
+            input_data["update"]["issuelinks"].append(self._get_link_data(args.link_type, args.link_issue))
+            return input_data
+
+
+    def _update_issue(self, issue, input_data, args):
+        input_data = self._process_query_links(input_data, args)
+        self._debug_print(f'Issue {issue} being updated with: {input_data}')
+        r = self._api_request('put', f"{self.JIRA_REST_URL}/issue/{issue}", json=input_data)
         if r.ok:
             print(f'Issue {issue} updated.')
         else:
@@ -311,14 +357,19 @@ class EasyJira:
             <...> --json ' {"update": { "labels": [ {"add": "mynewlabel"} ] } }'
             <...> --json ' {"update": { "labels": [ {"remove": "mynewlabel"} ] } }'
 
-        query={"update":{"labels":[{"add":"jira-bugzilla-resync"}]}}
-        r=requests.put(f"{self.JIRA_REST_URL}/issue/RHELPLAN-95816", json=query, headers=headers, verify=False)
+        input_data={"update":{"labels":[{"add":"jira-bugzilla-resync"}]}}
+        r=requests.put(f"{self.JIRA_REST_URL}/issue/RHELPLAN-95816", json=input_data, headers=headers, verify=False)
         """
-        query = json.loads(args.json)
+        if args.json:
+            input_data = json.loads(args.json)
+        elif args.json_file:
+            with open(args.json_file, 'r') as f:
+                input_data = json.load(f)
+        else:
+            input_data = {}
         if args.id:
             for issue in args.id:
-                print(f'Issue {issue} being updated with: {query}')
-                self._update_issue(issue, query)
+                self._update_issue(issue, input_data, args)
 
 
     def _replace_re(self, original_value, key, args):
@@ -337,35 +388,13 @@ class EasyJira:
 
 
     def _get_link_data(self, link_type, issue):
-        link_data = {
-            "clones": {
-              "name": "Cloners",
-              "inward":"is cloned by",
-              "outward":"clones"
-              },
-            "blocks": {
-              "name": "Blocks",
-              "inward": "is blocked by",
-              "outward": "blocks",
-              },
-            "depends on": {
-              "name": "Depend",
-              "inward": "is depended on by",
-              "outward": "depends on",
-              },
-            "duplicates": {
-              "name": "Duplicate",
-              "inward": "is duplicated by",
-              "outward": "duplicates",
-              }
-            }
 
-        if link_type in link_data:
-            type_data = link_data[link_type]
+        if link_type in self.link_data:
+            type_data = self.link_data[link_type]
         else:
-            self._error(f"Error: link_type {link_type} not recognized. Pick one of: " + ','.join(link_data.keys()))
+            self._error(f"Error: link_type {link_type} not recognized. Pick one of: " + ','.join(self.link_data.keys()))
 
-        link_data = {
+        link_data_output = {
             "add": {
               "type": type_data,
                 "outwardIssue": {
@@ -374,7 +403,7 @@ class EasyJira:
               }
             }
 
-        return link_data
+        return link_data_output
 
 
     def cmd_clone(self, args):
@@ -585,7 +614,7 @@ class EasyJira:
         # new command
         parser_new = subparsers.add_parser('new', help='create a new JIRA issue')
         parser_new.set_defaults(func=self.cmd_create)
-        parser_new.add_argument('--json', action='store_true',
+        parser_new.add_argument('--json',
                                 help='Input raw issue data (JSON)')
         parser_new.add_argument('--json_file',
                                 help='Input raw issue data from a JSON file')
@@ -605,10 +634,14 @@ class EasyJira:
         parser_update.set_defaults(func=self.cmd_update)
         parser_update.add_argument('-j', '--id', '--jira_id', metavar='ID', type=str, nargs='+',
                                    help='Jira issues ID')
-        parser_update.add_argument('--json', metavar='json', type=str, required = True,
+        parser_update.add_argument('--json',
                                    help='JSON that defines what should be changed. See "Updating an Issue via the JIRA REST APIs" section of the Jira API: https://developer.atlassian.com/server/jira/platform/updating-an-issue-via-the-jira-rest-apis-6848604/')
+        parser_update.add_argument('--json_file',
+                                help='Input raw issue data from a JSON file')
         parser_update.add_argument('--comment', help='Longer comment to be added to the issue')
         parser_update.add_argument('--comment_file', help='Longer comment to be added to issue located in a file')
+        parser_update.add_argument('--link-type', choices=self.link_data.keys(), help='What type of link to use')
+        parser_update.add_argument('--link-issue', metavar='ID', help='Jira issue ID to link to')
 
         # clone command
         parser_clone = subparsers.add_parser('clone', help='clone a JIRA issue')
@@ -660,6 +693,8 @@ class EasyJira:
 
         args = parser.parse_args(args=fake_args) if fake_args else parser.parse_args()
         self._program_args = args
+        self._debug = args.debug
+
         args.func(args)
 
         return 0
