@@ -3,6 +3,8 @@ Why this project exists
 
 You know it -- 14 competing standards and none is good enough... 
 
+![14 competing standards xkcd](https://imgs.xkcd.com/comics/standards_2x.png)
+
 Yes, yes, I admit this is yet another tool that tries to work with Jira API with some universal way, but hold your horses, hear this story:
 
 Imagine me being a developer who wanted to script some repeating work in Jira and also was familiar with python-bugzilla -- that tool allowed me to use it efficiently because I already knew the interface, fields, and it behaved pretty intuitively. Adding a blocker to various trackers, commenting or closing several bugs was therefore a matter of a minute if I had bug IDs at hand:
