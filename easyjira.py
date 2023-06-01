@@ -128,7 +128,7 @@ class EasyJira:
 
     def _api_request(self, method, url, params=None, json=None, fake_return=None):
         headers = self._get_headers()
-        log = []
+        log = ['']
         if method == 'post':
             log.append(self._log_arg('json', json))
             log.append(f'response = requests.post("{url}", json=json, headers=headers)')

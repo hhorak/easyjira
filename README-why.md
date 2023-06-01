@@ -44,7 +44,7 @@ Issue RHELPLAN-158807 moved to Closed.
 Comment added to the issue RHELPLAN-158807.
 ```
 
-And you can then check the API calls done during the way (blank lines added for better readability):
+And you can then check the API calls done during the way:
 
 ```
 $ cat /tmp/apicalls.py
