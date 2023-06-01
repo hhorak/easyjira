@@ -88,17 +88,26 @@ class EasyJira:
         return None
 
 
+    def _write_api_calls(self, data):
+        if self._program_args.store_api_calls:
+            with open(self._program_args.store_api_calls, 'a') as f:
+                f.write(data)
+                f.write('\n')
+        if self._program_args.show_api_calls:
+                print(data, file=sys.stderr)
+
+
     def _get_auth_data(self) -> dict:
         token = self._get_token()
         auth = {
                 "Accept": "application/json",
                 "Authorization": "Bearer {token}"
                }
-        if self._program_args.show_api_calls and not self._log_headers_done:
-            print('#!/usr/bin/env python3', file=sys.stderr)
-            print('# Python 3 snippets that may help you write your script, do not use without proper review', file=sys.stderr)
-            print('import requests, pprint', file=sys.stderr)
-            print(self._log_arg('headers', auth), file=sys.stderr)
+        if not self._log_headers_done:
+            self._write_api_calls('#!/usr/bin/env python3')
+            self._write_api_calls('# Python 3 snippets that may help you write your script, do not use without proper review')
+            self._write_api_calls('import requests, pprint')
+            self._write_api_calls(self._log_arg('headers', auth))
             self._log_headers_done = True
         # replace the token string after the header is logged to not leak token
         auth["Authorization"] = auth["Authorization"].format(token=token)
@@ -138,8 +147,8 @@ class EasyJira:
         else:
             self._error(f'Error: Unsupported method for requests: {method}')
         log.append('pprint.pprint(response.json())')
-        if self._program_args.simulate or self._program_args.show_api_calls:
-            print('\n'.join(log), file=sys.stderr)
+        if self._program_args.simulate or self._program_args.show_api_calls or self._program_args.store_api_calls:
+            self._write_api_calls('\n'.join(log))
         if self._program_args.simulate:
             if fake_return:
                 return FakeResponse(fake_return)
@@ -590,6 +599,7 @@ class EasyJira:
         parser = argparse.ArgumentParser(prog=self.program_name, description=description, formatter_class=argparse.RawDescriptionHelpFormatter)
         subparsers = parser.add_subparsers(help='commands')
         parser.add_argument('--show-api-calls', action='store_true', help='Show what API calls the tool performed and with what input. The output is printed to stderr.')
+        parser.add_argument('--store-api-calls', help='Store what API calls the tool performed and with what input into a given file. The data are appeneded.')
         parser.add_argument('--simulate', action='store_true', help='Do not proceed with any API calls.')
         parser.add_argument('--debug', action='store_true', help='Show very verbose log of what the tool does.')
 
