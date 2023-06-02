@@ -70,13 +70,14 @@ class EasyJira:
 
 
     def _get_token(self) -> str:
+        """Retrieves the JIRA token from various sources."""
         if self._token:
             return self._token
         try:
             self._token = self._get_file_content(self._token_path).strip()
             return self._token
         except FileNotFoundError:
-            print(f'Configuration file {self._token_path} not found')
+            print(f'Configuration file {self._token_path} not found, one more attempt will be tried by reading JIRA_TOKEN environment variable, but storing it in a file with properly restrictive permissions might be safer.')
 
         try:
             self._token = os.environ['JIRA_TOKEN']
@@ -514,7 +515,7 @@ class EasyJira:
                 s = os.stat(token_dir)
                 if s.st_mode & 0o777 != 0o700:
                     self._error(f'Diretory {token_dir} must have 0700 permissions, so nobody else than the owner can read it')
-            print(f'Provide a token that will be stored to {_token_path}:', end='')
+            print(f'Provide a token created through Jira WebUI that will be stored to {self._token_path}:', flush=True)
             self._token = getpass.getpass()
             with open(self._token_path, "w") as f:
                 f.write(self._token)
