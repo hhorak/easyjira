@@ -60,7 +60,7 @@ class EasyJira:
             }
 
     def _error(self, message):
-        print(message)
+        print(f'ERROR: {message}')
         exit(1)
 
 
@@ -159,19 +159,21 @@ class EasyJira:
             log.append(f'response = requests.post("{url}", json=json, headers=headers)')
             if not self._program_args.simulate:
                 result = requests.post(url, json=json, headers=headers)
+            log.append(f'print(response.ok)')
         elif method == 'put':
             log.append(self._log_arg('json', json))
             log.append(f'response = requests.put("{url}", json=json, headers=headers)')
             if not self._program_args.simulate:
                 result = requests.put(url, json=json, headers=headers)
+            log.append(f'print(response.ok)')
         elif method == 'get':
             log.append(self._log_arg('params', params))
             log.append(f'response = requests.get("{url}", params=params, headers=headers)')
             if not self._program_args.simulate:
                 result = requests.get(url, params=params, headers=headers)
+            # not logging how to parse output, leaving this up to calling functions
         else:
             self._error(f'Error: Unsupported method for requests: {method}')
-        log.append('pprint.pprint(response.json())')
         if self._program_args.simulate or self._program_args.show_api_calls or self._program_args.store_api_calls:
             self._write_api_calls('\n'.join(log))
         if self._program_args.simulate:
@@ -181,16 +183,29 @@ class EasyJira:
         return result
 
 
-    def _print_issue(self, output_format, issue):
+    def _report_api_failure(self, r):
+        print(f'FAILURE: Api call failed.')
+        print(f'Reason: {r.reason}')
+        print(f'Text: {r.text}')
+        if self._debug:
+            pprint.pprint(r.raw)
+
+
+    def _print_issue(self, output_format, issue, log_api_if_required=True):
+        if log_api_if_required:
+            self._write_api_calls("print('{key}'.format(**issue))")
         print(output_format.format(**issue))
 
 
     def _print_issues(self, output_format, issues):
+        self._write_api_calls("for issue in issues:")
+        self._write_api_calls("    print('{key}'.format(**issue))")
         for issue in issues:
-            self._print_issue(output_format, issue)
+            self._print_issue(output_format, issue, log_api_if_required=False)
 
 
     def _print_raw_issues(self, issues):
+        self._write_api_calls("json.dumps(issues, sort_keys=True, indent=4))")
         print(json.dumps(issues, sort_keys=True, indent=4))
 
 
@@ -334,6 +349,7 @@ class EasyJira:
         if jql:
             query = urllib.parse.urlencode([('jql',jql), ('maxResults', max_results), ('startAt', start_at)])
             r = self._api_request('get', f"{self.JIRA_REST_URL}/search", params=query)
+            self._write_api_calls("issues = response['issues']")
             if r.ok:
                 output += r.json()['issues']
 
@@ -360,12 +376,12 @@ class EasyJira:
 
     def _create_issue(self, input_data, args):
         r = self._api_request('post', f"{self.JIRA_REST_URL}/issue", json=input_data)
+        self._write_api_calls("issue = response.json()")
         if not r.ok:
             print(r.text)
             self._error('Issue NOT created.')
         new_issue = r.json()
         # TODO: we can re-load the whole issue again to allow show other fields than key and id
-        #pprint.pprint(new_issue)
         if args.output_format:
             # use codecs to interpret escape characters
             output_format = codecs.escape_decode(bytes(args.output_format, "utf-8"))[0].decode("utf-8")
@@ -433,9 +449,8 @@ class EasyJira:
         if r.ok:
             print(f'Issue {issue} updated.')
         else:
-            print(f'ERROR: Issue {issue} NOT updated.')
-            print(dir(r))
-            pprint.pprint([r.reason, r.text, r.raw])
+            self._report_api_failure(r)
+            self._error(f'Issue {issue} NOT updated.')
 
 
     def cmd_update(self, args):
@@ -490,7 +505,7 @@ class EasyJira:
         if link_type in self.link_data:
             type_data = self.link_data[link_type]
         else:
-            self._error(f"Error: link_type {link_type} not recognized. Pick one of: " + ','.join(self.link_data.keys()))
+            self._error(f"link_type {link_type} not recognized. Pick one of: " + ','.join(self.link_data.keys()))
 
         link_data_output = {
             "add": {
@@ -534,10 +549,12 @@ class EasyJira:
             }
 
         self._create_issue(clon_data, args)
-        # pprint.pprint(clon_data)
 
 
     def _get_fake_transitions(self):
+        """
+        Returns hard-coded transitions data for simulating purposes.
+        """
         with open(fake_data_dir + '/transitions.json', 'r') as f:
             return json.load(f)
 
@@ -546,6 +563,9 @@ class EasyJira:
         r = self._api_request('get', f"{self.JIRA_REST_URL}/issue/{issue}/transitions?expand=transitions.fields", fake_return = fake_return)
         if r.ok:
             return r.json()['transitions']
+        else:
+            self._report_api_failure(r)
+            self._error(f'Could not read transitions for issue {issue}.')
 
 
     def _filter_transition_id(self, issue, status, resolution):
@@ -596,16 +616,16 @@ class EasyJira:
             if r.ok:
                 print(f'Issue {issue} moved to {status}.')
             else:
-                print(f'ERROR: Issue {issue} NOT transitioned.')
-                print(r.text)
+                self._report_api_failure(r)
+                self._error(f'Issue {issue} NOT transitioned.')
             if args.comment or args.comment_file:
                 comment_data = {'body': args.comment or self._get_file_content(args.comment_file)}
                 r = self._api_request('post', f"{self.JIRA_REST_URL}/issue/{issue}/comment", json=comment_data)
                 if r.ok:
                     print(f'Comment added to the issue {issue}.')
                 else:
-                    print(f'ERROR: Comment not added to the tissue {issue}.')
-                    print(r.text)
+                    self._report_api_failure(r)
+                    self._error(f'Comment not added to the tissue {issue}.')
 
 
     def cmd_access(self, args):
