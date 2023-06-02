@@ -85,11 +85,22 @@ class EasyJira:
         except KeyError:
             print("JIRA_TOKEN environment variable missing")
 
-        self._error(f'All attempts to get a JIRA token failed. Create one in the Jira web interface (see your Profile section) and save only the token string into a file located at {self._token_path}, or set it into the JIRA_TOKEN environment variable.')
+        self._error(f'All attempts to get a JIRA token failed. Create one in the Jira web interface (see your Profile section) and save only the token string into a file located at {self._token_path} with properly restricted access (preferred), or set it into the JIRA_TOKEN environment variable.')
         return None
 
 
     def _write_api_calls(self, data):
+        """
+        Writes API calls data to a file and/or prints it to stderr.
+
+        If the '_program_args.store_api_calls' attribute is set, the 'data' is appended
+        to the file specified by '_program_args.store_api_calls' with a newline character.
+        If the '_program_args.show_api_calls' attribute is set, the 'data' is printed to
+        stderr.
+
+        Args:
+            data (str): The API calls data to be written or printed.
+        """
         if self._program_args.store_api_calls:
             with open(self._program_args.store_api_calls, 'a') as f:
                 f.write(data)
@@ -99,6 +110,9 @@ class EasyJira:
 
 
     def _get_auth_data(self) -> dict:
+        """
+        Retrieves authentication data including headers with the JIRA token.
+        """
         token = self._get_token()
         auth = {
                 "Accept": "application/json",
@@ -120,6 +134,16 @@ class EasyJira:
 
 
     def _log_arg(self, arg_name, arg):
+        """
+        Formats an argument name and value for logging purposes.
+
+        Args:
+            arg_name (str): The name of the argument.
+            arg: The value of the argument.
+
+        Returns:
+            str: Formatted argument representation for logging.
+        """
         if not arg:
             return f'{arg_name} = None'
 
@@ -181,6 +205,19 @@ class EasyJira:
 
 
     def _get_issue_types(self, project):
+        """
+        Retrieves the issue types for a project from Jira.
+
+        Makes a GET request to the Jira API to fetch the issue types
+        for the specified project. Returns a dictionary mapping the
+        issue type names to their corresponding IDs.
+
+        Args:
+            project (str): The key or ID of the project.
+
+        Returns:
+            dict: A dictionary mapping issue type names to their IDs.
+        """
         r = self._api_request('get', f"{self.JIRA_REST_URL}/issue/createmeta/{project}/issuetypes")
         data = r.json()
         result = {}
@@ -191,7 +228,23 @@ class EasyJira:
             self._error(f'Issue types not found. It is possible that project {project} does not exist. Reason given by Jira: {reason}')
         return result
 
+
     def _get_fields_mapping(self, project, issue_type, only_required=False):
+        """
+        Retrieves the field mapping for a specific issue type in a project.
+
+        Makes a GET request to the Jira API to fetch the field mapping
+        for the given issue type in the specified project. Returns a
+        dictionary mapping field IDs to their corresponding names.
+
+        Args:
+            project (str): The key or ID of the project.
+            issue_type (str): The name of the issue type.
+            only_required (bool): Flag to include only required fields in the mapping.
+
+        Returns:
+            dict: A dictionary mapping field IDs to their names.
+        """
         issue_types = self._get_issue_types(project)
         mapping = {}
         r = self._api_request('get', f"{self.JIRA_REST_URL}/issue/createmeta/{project}/issuetypes/{issue_types[issue_type]}")
@@ -203,7 +256,16 @@ class EasyJira:
             self._error(f'Data not found. It is possible that project {project} has no issue type {issue_type}. Reason given by Jira: {reason}')
         return mapping
 
+
     def _get_fields_mapping_for_issue(self, jira_id, only_required=False):
+        """
+        Retrieves the field mapping for a specific issue type in a project.
+
+        Works similarly to _get_fields_mapping, except the project and issue
+        type is specified by a concrete issue.
+
+        See _get_fields_mapping for more information.
+        """
         mapping = {}
         r = self._api_request('get', f"{self.JIRA_REST_URL}/issue/{jira_id}/editmeta?expand=projects.issuetypes.fields")
         data = r.json()
@@ -214,7 +276,11 @@ class EasyJira:
             self._error(f'Data not found. It is possible that project {project} has no issue type {issue_type}. Reason given by Jira: {reason}')
         return mapping
 
+
     def _get_jql_from_url(self, url) -> str:
+        """
+        Extracts the JQL (Jira Query Language) from a given URL.
+        """
         url_parsed = urllib.parse.urlparse(url)
         jql = ''
         if url_parsed.query != '':
@@ -228,6 +294,9 @@ class EasyJira:
 
 
     def cmd_fields_mapping(self, args):
+        """
+        Command handler for retrieving and printing field mappings.
+        """
         if args.id:
             mapping = self._get_fields_mapping_for_issue(args.id, args.only_required)
         else:
@@ -236,6 +305,20 @@ class EasyJira:
 
 
     def _get_issues(self, ids=None, from_url=None, jql=None, max_results=None, start_at=None):
+        """
+        Retrieves issues based on issue IDs, a URL with a query, or
+        a JQL query. Returns a list of issues.
+
+        Args:
+            ids (list): List of issue IDs.
+            from_url (str): URL containing a query.
+            jql (str): JQL query string.
+            max_results (int): Maximum number of results to retrieve.
+            start_at (int): Index of the first result to retrieve.
+
+        Returns:
+            list: A list of issues.
+        """
         output=[]
 
         # get issues based on ID
@@ -258,6 +341,9 @@ class EasyJira:
 
 
     def cmd_query(self, args):
+        """
+        Command handler for querying and printing issues.
+        """
         output = self._get_issues(args.id, args.from_url, args.jql, args.max_results, args.start_at)
 
         if args.output_format:
@@ -398,7 +484,9 @@ class EasyJira:
 
 
     def _get_link_data(self, link_type, issue):
-
+        """
+        Returns a valid dictionary structure for a given link type and issue ID
+        """
         if link_type in self.link_data:
             type_data = self.link_data[link_type]
         else:
@@ -461,6 +549,24 @@ class EasyJira:
 
 
     def _filter_transition_id(self, issue, status, resolution):
+        """
+        Filters and retrieves the transition ID and resolution for a given issue and status.
+
+        Retrieves the transitions for the specified issue and checks if there is a transition
+        with the given status. If found, returns a dictionary containing the transition ID and,
+        if applicable, the resolution name. If no matching transition is found, raises an error.
+
+        Args:
+            issue (str): The ID of the issue.
+            status (str): The desired status for the transition.
+            resolution (str): The desired resolution for the transition (if applicable).
+
+        Returns:
+            dict: A dictionary containing the transition ID and, if applicable, the resolution name.
+
+        Raises:
+            Exception: If no matching transition is found for the given issue and status.
+        """
         result = {}
         transitions = self._get_transitions(issue)
         for t in transitions:
