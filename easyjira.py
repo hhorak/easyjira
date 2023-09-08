@@ -30,6 +30,7 @@ class EasyJira:
         self.JIRA_REST_URL = f"{self.JIRA_PROJECTS_URL}/rest/api/2"
         self.DEFAULT_MAX_RESULTS = 20
         self._token_path = os.path.expanduser("~/.config/jira/" + self.program_name)
+        self._token_username = 'token' # Used for keyring storage
         self._token = None
         self._program_args = None
         self._default_output = "{key}"
@@ -69,15 +70,37 @@ class EasyJira:
             print(message)
 
 
+    def _get_token_keyring(self) -> str:
+        """Retrieves the JIRA token from password keyring"""
+        try:
+            import keyring
+
+            token = keyring.get_password(self.JIRA_PROJECTS_URL, self.program_name+'-token')
+            if not token:
+                token = keyring.get_password(self.JIRA_PROJECTS_URL, self._token_username)
+            if token:
+                self._token = token
+                self.token_source = 'keyring'
+        except ImportError:
+            token = None
+        except Exception as e:
+            print(f'Python keyring found, but token fetch failed with: {e}')
+        return token
+
+
     def _get_token(self) -> str:
         """Retrieves the JIRA token from various sources."""
         if self._token:
             return self._token
+        if self._get_token_keyring():
+            return self._token
         try:
             self._token = self._get_file_content(self._token_path).strip()
+            self.token_source = 'file'
             return self._token
         except FileNotFoundError:
             print(f'Configuration file {self._token_path} not found, one more attempt will be tried by reading JIRA_TOKEN environment variable, but storing it in a file with properly restrictive permissions might be safer.')
+            print(f'Alternatively use command access --configure --keyring')
 
         try:
             self._token = os.environ['JIRA_TOKEN']
@@ -627,6 +650,9 @@ class EasyJira:
                     self._report_api_failure(r)
                     self._error(f'Comment not added to the tissue {issue}.')
 
+    def _request_token(self, storage):
+        print(f'Provide a token created through Jira WebUI that will be stored to {storage}:', flush=True)
+        self._token = getpass.getpass()
 
     def cmd_access(self, args):
         """
@@ -634,17 +660,22 @@ class EasyJira:
         verifying the returned value includes what it should.
         """
         if args.configure:
-            token_dir = os.path.dirname(self._token_path)
-            if not os.path.exists(token_dir):
-                os.mkdir(token_dir, mode = 0o700)
+            if not args.keyring:
+                token_dir = os.path.dirname(self._token_path)
+                if not os.path.exists(token_dir):
+                    os.mkdir(token_dir, mode = 0o700)
+                else:
+                    s = os.stat(token_dir)
+                    if s.st_mode & 0o777 != 0o700:
+                        self._error(f'Diretory {token_dir} must have 0700 permissions, so nobody else than the owner can read it')
+                self._request_token(self._token_path)
+                with open(self._token_path, "w") as f:
+                    f.write(self._token)
             else:
-                s = os.stat(token_dir)
-                if s.st_mode & 0o777 != 0o700:
-                    self._error(f'Diretory {token_dir} must have 0700 permissions, so nobody else than the owner can read it')
-            print(f'Provide a token created through Jira WebUI that will be stored to {self._token_path}:', flush=True)
-            self._token = getpass.getpass()
-            with open(self._token_path, "w") as f:
-                f.write(self._token)
+                import keyring
+
+                self._request_token('keyring')
+                keyring.set_password(self.JIRA_PROJECTS_URL, self._token_username, self._token)
 
         issues = self._get_issues(ids=['RHELPLAN-141790'])
         if issues[0]['id'] != '14977200':
@@ -824,6 +855,7 @@ class EasyJira:
         parser_access = subparsers.add_parser('access', help='verifies that the tool is able to access the server')
         parser_access.set_defaults(func=self.cmd_access)
         parser_access.add_argument('--configure', action='store_true', help='Configure access to the Jira server')
+        parser_access.add_argument('--keyring', action='store_true', help='Store token to the Jira server into the keyring')
 
         if len(sys.argv) <= 1:
             sys.argv.append('--help')
