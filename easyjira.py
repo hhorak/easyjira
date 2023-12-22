@@ -216,6 +216,7 @@ class EasyJira:
 
     def _get_issue(self, issue):
         r = self._api_request('get', f"{self.JIRA_REST_URL}/issue/{issue}")
+        self._write_api_calls("issues = [response.json()]")
         return r.json()
 
 
@@ -353,7 +354,7 @@ class EasyJira:
         if jql:
             query = urllib.parse.urlencode([('jql',jql), ('maxResults', max_results), ('startAt', start_at)])
             r = self._api_request('get', f"{self.JIRA_REST_URL}/search", params=query)
-            self._write_api_calls("issues = response['issues']")
+            self._write_api_calls("issues = response.json()['issues']")
             if r.ok:
                 output += r.json()['issues']
 
