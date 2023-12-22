@@ -214,8 +214,12 @@ class EasyJira:
             return '\n'.join(f.readlines())
 
 
-    def _get_issue(self, issue):
-        r = self._api_request('get', f"{self.JIRA_REST_URL}/issue/{issue}")
+    def _get_issue(self, issue, expand):
+        param_list = []
+        if expand:
+            param_list.append(('expand', expand))
+        query = urllib.parse.urlencode(param_list)
+        r = self._api_request('get', f"{self.JIRA_REST_URL}/issue/{issue}", params=query)
         self._write_api_calls("issues = [response.json()]")
         return r.json()
 
@@ -324,7 +328,7 @@ class EasyJira:
         print(json.dumps(mapping, sort_keys=True, indent=4))
 
 
-    def _get_issues(self, ids=None, from_url=None, jql=None, max_results=None, start_at=None):
+    def _get_issues(self, ids=None, from_url=None, jql=None, max_results=None, start_at=None, expand=None):
         """
         Retrieves issues based on issue IDs, a URL with a query, or
         a JQL query. Returns a list of issues.
@@ -344,7 +348,7 @@ class EasyJira:
         # get issues based on ID
         if ids:
             for issue in ids:
-                output.append(self._get_issue(issue))
+                output.append(self._get_issue(issue, expand))
 
         # get issues based on url with a query
         if from_url:
@@ -352,7 +356,10 @@ class EasyJira:
 
         # get issues based on jql only
         if jql:
-            query = urllib.parse.urlencode([('jql',jql), ('maxResults', max_results), ('startAt', start_at)])
+            param_list = [('jql',jql), ('maxResults', max_results), ('startAt', start_at)]
+            if expand:
+                param_list.append(('expand', expand))
+            query = urllib.parse.urlencode(param_list)
             r = self._api_request('get', f"{self.JIRA_REST_URL}/search", params=query)
             self._write_api_calls("issues = response.json()['issues']")
             if r.ok:
@@ -365,7 +372,7 @@ class EasyJira:
         """
         Command handler for querying and printing issues.
         """
-        output = self._get_issues(args.id, args.from_url, args.jql, args.max_results, args.start_at)
+        output = self._get_issues(args.id, args.from_url, args.jql, args.max_results, args.start_at, args.expand)
 
         if args.output_format:
             # use codecs to interpret escape characters
@@ -747,6 +754,7 @@ class EasyJira:
                             help='Display raw issue data (JSON)')
         parser_query.add_argument('--start_at', dest='start_at', default=0, help='Pagination, start at which item in the output of a single query')
         parser_query.add_argument('--max_results', dest='max_results', default=self.DEFAULT_MAX_RESULTS, help='Pagination, how many items in the output of a single query, not counting individually requested IDs')
+        parser_query.add_argument('--expand', help='Force expanding some fields, passed without check to REST API (?expand=...), typical values separated by a comma: transitions, changelog')
 
         # the idea here is to use something like print("format from user".format(**issue)) but needs to be validated by some real pythonist for security
         parser_query.add_argument('--outputformat', dest='output_format',
