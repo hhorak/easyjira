@@ -209,7 +209,8 @@ class EasyJira:
         self._write_api_calls("json.dumps(issues, sort_keys=True, indent=4))")
         print(json.dumps(issues, sort_keys=True, indent=4))
 
-    def _print_transitions_changelog(self, issues):
+
+    def _get_transitions_changelog(self, issues):
         issues_transitions = []
         for issue in issues:
             for entry in issue['changelog']['histories']:
@@ -218,7 +219,12 @@ class EasyJira:
                         points = issue['fields'][self.STORY_POINTS_FIELD]
                         points = '0.0' if not points else points
                         issues_transitions.append({'key': issue['key'], 'from': item['fromString'], 'to': item['toString'], 'timestamp': entry['created'], 'points': points})
-        print(json.dumps(issues_transitions, sort_keys=True, indent=4))
+        return issues_transitions
+
+
+    def _print_transitions_changelog(self, issues):
+        print(json.dumps(self._get_transitions_changelog(issues), sort_keys=True, indent=4))
+
 
     def _get_file_content(self, filename):
         with open(filename) as f:
