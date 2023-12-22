@@ -29,6 +29,7 @@ class EasyJira:
         self.JIRA_PROJECTS_URL = "https://issues.redhat.com"
         self.JIRA_REST_URL = f"{self.JIRA_PROJECTS_URL}/rest/api/2"
         self.DEFAULT_MAX_RESULTS = 20
+        self.STORY_POINTS_FIELD = 'customfield_12310243'
         self._token_path = os.path.expanduser("~/.config/jira/" + self.program_name)
         self._token = None
         self._program_args = None
@@ -214,7 +215,9 @@ class EasyJira:
             for entry in issue['changelog']['histories']:
                 for item in entry['items']:
                     if item['field'] == 'status':
-                        issues_transitions.append({'key': issue['key'], 'from': item['fromString'], 'to': item['toString'], 'timestamp': entry['created']})
+                        points = issue['fields'][self.STORY_POINTS_FIELD]
+                        points = '0.0' if not points else points
+                        issues_transitions.append({'key': issue['key'], 'from': item['fromString'], 'to': item['toString'], 'timestamp': entry['created'], 'points': points})
         print(json.dumps(issues_transitions, sort_keys=True, indent=4))
 
     def _get_file_content(self, filename):
