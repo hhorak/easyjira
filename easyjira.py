@@ -262,6 +262,10 @@ class EasyJira:
         """
         issue_types = self._get_issue_types(project)
         mapping = {}
+        # TODO: createmeta only shows some subset of fields, we should rather use editmeta,
+        # but we need some ticket for that -- that can be done by querying any issue of the
+        # specific type and ask about that particular issue
+        # {self.JIRA_REST_URL}/issue/{issue}/editemeta?expand=projects.issuetypes.fields
         r = self._api_request('get', f"{self.JIRA_REST_URL}/issue/createmeta/{project}/issuetypes/{issue_types[issue_type]}")
         data = r.json()
         try:
