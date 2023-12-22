@@ -208,6 +208,14 @@ class EasyJira:
         self._write_api_calls("json.dumps(issues, sort_keys=True, indent=4))")
         print(json.dumps(issues, sort_keys=True, indent=4))
 
+    def _print_transitions_changelog(self, issues):
+        issues_transitions = []
+        for issue in issues:
+            for entry in issue['changelog']['histories']:
+                for item in entry['items']:
+                    if item['field'] == 'status':
+                        issues_transitions.append({'key': issue['key'], 'from': item['fromString'], 'to': item['toString'], 'timestamp': entry['created']})
+        print(json.dumps(issues_transitions, sort_keys=True, indent=4))
 
     def _get_file_content(self, filename):
         with open(filename) as f:
@@ -372,6 +380,13 @@ class EasyJira:
         """
         Command handler for querying and printing issues.
         """
+        # if asking for transition changelog, we must retrieve changelog
+        if args.transitions_changelog:
+            if not args.expand:
+                args.expand = 'changelog'
+            elif 'changelog' not in args.expand.split(','):
+                args.expand += ',changelog'
+
         output = self._get_issues(args.id, args.from_url, args.jql, args.max_results, args.start_at, args.expand)
 
         if args.output_format:
@@ -382,6 +397,8 @@ class EasyJira:
 
         if args.raw:
             self._print_raw_issues(output)
+        elif args.transitions_changelog:
+            self._print_transitions_changelog(output)
         else:
             self._print_issues(output_format, output)
 
@@ -755,6 +772,7 @@ class EasyJira:
         parser_query.add_argument('--start_at', dest='start_at', default=0, help='Pagination, start at which item in the output of a single query')
         parser_query.add_argument('--max_results', dest='max_results', default=self.DEFAULT_MAX_RESULTS, help='Pagination, how many items in the output of a single query, not counting individually requested IDs')
         parser_query.add_argument('--expand', help='Force expanding some fields, passed without check to REST API (?expand=...), typical values separated by a comma: transitions, changelog')
+        parser_query.add_argument('--transitions-changelog', action='store_true', help='Show only transitions changelog as the output')
 
         # the idea here is to use something like print("format from user".format(**issue)) but needs to be validated by some real pythonist for security
         parser_query.add_argument('--outputformat', dest='output_format',
