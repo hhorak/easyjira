@@ -11,6 +11,7 @@ import json
 import textwrap
 import getpass
 import re
+import datetime
 
 currentdir = os.path.dirname(os.path.realpath(__file__))
 fake_data_dir = currentdir + '/tests'
@@ -30,6 +31,7 @@ class EasyJira:
         self.JIRA_REST_URL = f"{self.JIRA_PROJECTS_URL}/rest/api/2"
         self.DEFAULT_MAX_RESULTS = 20
         self.STORY_POINTS_FIELD = 'customfield_12310243'
+        self.stats_window = 1
         self._token_path = os.path.expanduser("~/.config/jira/" + self.program_name)
         self._token = None
         self._program_args = None
@@ -226,6 +228,63 @@ class EasyJira:
         print(json.dumps(self._get_transitions_changelog(issues), sort_keys=True, indent=4))
 
 
+    def _get_bucket_key(self, timestamp):
+        parsed_date = datetime.datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%S.%f%z")
+        return parsed_date.strftime("%Y%W")
+
+
+    def _standardize_points(self, points):
+        points = float(points) if points else 0
+        return 3 if points < 0.5 else points
+
+
+    def _store_bucket(self, bucket, bucket_key, item_key, item_value):
+        if bucket_key not in bucket:
+            bucket[bucket_key] = {}
+        bucket[bucket_key][item_key] = item_value
+
+
+    def _print_transitions_stats(self, issues):
+        buckets = {'created': {}, 'triaged': {}, 'built': {}, 'tested': {}, 'done': {}}
+        stats = {'created': {}, 'triaged': {}, 'built': {}, 'tested': {}, 'done': {}}
+        tmp_buckets = {'triaged': {}, 'built': {}, 'tested': {}, 'done': {}}
+
+        for issue in issues:
+            self._store_bucket(buckets['created'], self._get_bucket_key(issue['fields']['created']), issue['key'], self._standardize_points(issue['fields'][self.STORY_POINTS_FIELD]))
+
+        transitions = self._get_transitions_changelog(issues)
+        buckets_definition = {'In Progress': 'triaged', 'Planning': 'triaged', 'ASSIGNED': 'triaged', 'ON_DEV': 'triaged', 'MODIFIED': 'triaged', 'POST': 'triaged', 'Refinement': 'triaged', 'Planned': 'triaged', 'Blocked': 'triaged', 'New': 'triaged',
+                              'Integration': 'built', 'ON_QA': 'built', 'Review': 'built',
+                              'Verified': 'tested', 'Release Pending': 'tested',
+                              'Closed': 'done', 'Abandoned': 'done', 'Done': 'done'}
+        for transition in transitions:
+            self._store_bucket(tmp_buckets[buckets_definition[transition['to']]], transition['key'], self._get_bucket_key(transition['timestamp']), self._standardize_points(transition['points']))
+
+        for bucket_key in tmp_buckets:
+            for issue_key in tmp_buckets[bucket_key]:
+                best_key = max(tmp_buckets[bucket_key][issue_key].keys()) if bucket_key == 'done' else min(tmp_buckets[bucket_key][issue_key].keys())
+                self._store_bucket(buckets[bucket_key], best_key, issue_key, tmp_buckets[bucket_key][issue_key][best_key])
+
+        for bucket_key in buckets:
+            for date_key in buckets[bucket_key]:
+                for i in range(self.stats_window):
+                    k = str(int(date_key)-i)
+                    if k not in stats[bucket_key]:
+                        stats[bucket_key][k] = 0
+                    stats[bucket_key][k] += sum(buckets[bucket_key][date_key].values())
+
+        stats_date = {}
+        for bucket_key in stats:
+            for date_key in stats[bucket_key]:
+                if date_key not in stats_date:
+                    stats_date[date_key] = {}
+                stats_date[date_key][bucket_key] = stats[bucket_key][date_key]
+
+        print('\t'.join(['week'] + list(stats.keys())))
+        for date_key in sorted(stats_date.keys()):
+            print('\t'.join([date_key] + [(str(stats_date[date_key][bucket_key]) if bucket_key in stats_date[date_key] else '0') for bucket_key in stats]))
+
+
     def _get_file_content(self, filename):
         with open(filename) as f:
             return '\n'.join(f.readlines())
@@ -390,7 +449,7 @@ class EasyJira:
         Command handler for querying and printing issues.
         """
         # if asking for transition changelog, we must retrieve changelog
-        if args.transitions_changelog:
+        if args.transitions_changelog or args.transitions_stats:
             if not args.expand:
                 args.expand = 'changelog'
             elif 'changelog' not in args.expand.split(','):
@@ -408,6 +467,8 @@ class EasyJira:
             self._print_raw_issues(output)
         elif args.transitions_changelog:
             self._print_transitions_changelog(output)
+        elif args.transitions_stats:
+            self._print_transitions_stats(output)
         else:
             self._print_issues(output_format, output)
 
@@ -782,6 +843,7 @@ class EasyJira:
         parser_query.add_argument('--max_results', dest='max_results', default=self.DEFAULT_MAX_RESULTS, help='Pagination, how many items in the output of a single query, not counting individually requested IDs')
         parser_query.add_argument('--expand', help='Force expanding some fields, passed without check to REST API (?expand=...), typical values separated by a comma: transitions, changelog')
         parser_query.add_argument('--transitions-changelog', action='store_true', help='Show only transitions changelog as the output')
+        parser_query.add_argument('--transitions-stats', action='store_true', help='Show transitions stats on weekly basis and window of 4 weeks')
 
         # the idea here is to use something like print("format from user".format(**issue)) but needs to be validated by some real pythonist for security
         parser_query.add_argument('--outputformat', dest='output_format',
