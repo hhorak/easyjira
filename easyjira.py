@@ -67,6 +67,10 @@ class EasyJira:
         exit(1)
 
 
+    def _warning(self, message):
+        print(f'WARNING: {message}')
+
+
     def _debug_print(self, message):
         if self._debug:
             print(message)
@@ -194,9 +198,30 @@ class EasyJira:
             pprint.pprint(r.raw)
 
 
+    def _add_composite_fields(self, issue):
+        cves = [l for l in issue['fields']['labels'] if l.startswith('CVE-')]
+        bzs = [l.replace('flaw:bz#', '') for l in issue['fields']['labels'] if l.startswith('flaw:bz#')]
+        summary_stripped = re.sub(r'\s*CVE-[0-9]*-[0-9]*\s*', '', re.sub(r'\s*\[rhel.*\]\s*$', '', issue['fields']['summary']))
+        issue['fields']['errata_description'] = "{} ({})".format(summary_stripped, ' '.join(cves if len(cves) > 0 else bzs))
+        issue['fields']['errata_trackers'] = ' '.join(cves + bzs)
+        issue['fields']['cves'] = ' '.join(cves)
+        issue['fields']['labels_list'] = ' '.join(issue['fields']['labels'])
+        if 'components' in issue['fields']:
+            issue['fields']['components_list'] = ' '.join([n['name'] for n in issue['fields']['components']])
+        if self.STORY_POINTS_FIELD in issue['fields'] and 'story_points' not in issue['fields']:
+            issue['fields']['story_points'] = issue['fields'][self.STORY_POINTS_FIELD]
+        if self._debug:
+            pprint.pprint(issue['errata_trackers'])
+            pprint.pprint(issue['errata_description'])
+
+
     def _print_issue(self, output_format, issue, log_api_if_required=True):
+        if 'key' not in issue and 'errorMessages' in issue:
+            self._error('; '.join(issue['errorMessages']))
+            return
         if log_api_if_required:
             self._write_api_calls("print('{key}'.format(**issue))")
+        self._add_composite_fields(issue)
         print(output_format.format(**issue))
 
 
@@ -249,11 +274,13 @@ class EasyJira:
         stats = {'created': {}, 'triaged': {}, 'built': {}, 'tested': {}, 'done': {}}
         tmp_buckets = {'triaged': {}, 'built': {}, 'tested': {}, 'done': {}}
 
+        self._debug_print("number of issues: {}".format(str(len(issues))))
+
         for issue in issues:
             self._store_bucket(buckets['created'], self._get_bucket_key(issue['fields']['created']), issue['key'], self._standardize_points(issue['fields'][self.STORY_POINTS_FIELD]))
 
         transitions = self._get_transitions_changelog(issues)
-        buckets_definition = {'In Progress': 'triaged', 'Planning': 'triaged', 'ASSIGNED': 'triaged', 'ON_DEV': 'triaged', 'MODIFIED': 'triaged', 'POST': 'triaged', 'Refinement': 'triaged', 'Planned': 'triaged', 'Blocked': 'triaged', 'New': 'triaged',
+        buckets_definition = {'In Progress': 'triaged', 'Planning': 'triaged', 'ASSIGNED': 'triaged', 'ON_DEV': 'triaged', 'MODIFIED': 'triaged', 'POST': 'triaged', 'Refinement': 'triaged', 'Planned': 'triaged', 'Blocked': 'triaged', 'New': 'triaged', 'In Development': 'triaged', 'Development': 'triaged',
                               'Integration': 'built', 'ON_QA': 'built', 'Review': 'built',
                               'Verified': 'tested', 'Release Pending': 'tested',
                               'Closed': 'done', 'Abandoned': 'done', 'Done': 'done'}
@@ -390,6 +417,7 @@ class EasyJira:
                 elif url_query[0] == 'jql' and len(url_query) == 2:
                     # not sure how we can only encode the value
                     jql = url_query[1]
+        self._debug_print("JQL parsed from URL: '{}'".format(jql))
         return jql
 
 
@@ -404,7 +432,7 @@ class EasyJira:
         print(json.dumps(mapping, sort_keys=True, indent=4))
 
 
-    def _get_issues(self, ids=None, from_url=None, jql=None, max_results=None, start_at=None, expand=None):
+    def _get_issues(self, ids=None, from_url=None, jql=None, max_results=None, start_at=0, expand=None, auto_paginate=None):
         """
         Retrieves issues based on issue IDs, a URL with a query, or
         a JQL query. Returns a list of issues.
@@ -432,14 +460,22 @@ class EasyJira:
 
         # get issues based on jql only
         if jql:
-            param_list = [('jql',jql), ('maxResults', max_results), ('startAt', start_at)]
-            if expand:
-                param_list.append(('expand', expand))
-            query = urllib.parse.urlencode(param_list)
-            r = self._api_request('get', f"{self.JIRA_REST_URL}/search", params=query)
-            self._write_api_calls("issues = response.json()['issues']")
-            if r.ok:
-                output += r.json()['issues']
+            jql_issues = []
+            # no matter how big maxResults is, Jira returns only 1000 issues, so let's repeat the query if needed
+            while max_results > len(jql_issues):
+                param_list = [('jql',jql), ('maxResults', max_results), ('startAt', start_at)]
+                start_at = start_at + 1000 if start_at else 1000
+                if expand:
+                    param_list.append(('expand', expand))
+                query = urllib.parse.urlencode(param_list)
+                r = self._api_request('get', f"{self.JIRA_REST_URL}/search", params=query)
+                self._write_api_calls("issues = response.json()['issues']")
+                if r.ok:
+                    jql_issues += r.json()['issues']
+                output += jql_issues
+                # stop the cycle if we return less than the hard limit of Jira is
+                if len(jql_issues) < 1000:
+                    break
 
         return output
 
@@ -455,7 +491,10 @@ class EasyJira:
             elif 'changelog' not in args.expand.split(','):
                 args.expand += ',changelog'
 
-        output = self._get_issues(args.id, args.from_url, args.jql, args.max_results, args.start_at, args.expand)
+        output = self._get_issues(args.id, args.from_url, args.jql, args.max_results, args.start_at, args.expand, args.auto_paginate)
+
+        if len(output) == 1000:
+            self._warning("Exactly 1000 issues were returned, the list might not be complete, because 1000 is hard limit in Jira API")
 
         if args.output_format:
             # use codecs to interpret escape characters
@@ -746,7 +785,7 @@ class EasyJira:
                 f.write(self._token)
 
         issues = self._get_issues(ids=['RHELPLAN-141790'])
-        if issues[0]['id'] != '14977200':
+        if len(issues) < 1 or 'id' not in issues[0] or issues[0]['id'] != '14977200':
             self._error('Failure: Access does not look good, at least reading RHELPLAN-141790 did not succeed.')
         print(f'Access to the server {self.JIRA_PROJECTS_URL} looks good.')
 
@@ -841,13 +880,14 @@ class EasyJira:
                             help='Display raw issue data (JSON)')
         parser_query.add_argument('--start_at', dest='start_at', default=0, help='Pagination, start at which item in the output of a single query')
         parser_query.add_argument('--max_results', dest='max_results', default=self.DEFAULT_MAX_RESULTS, help='Pagination, how many items in the output of a single query, not counting individually requested IDs')
+        parser_query.add_argument('--auto_paginate', dest='auto_paginate', action='store_true', help='Use pagination automatically to read all results and fetch them repeatadly')
         parser_query.add_argument('--expand', help='Force expanding some fields, passed without check to REST API (?expand=...), typical values separated by a comma: transitions, changelog')
         parser_query.add_argument('--transitions-changelog', action='store_true', help='Show only transitions changelog as the output')
         parser_query.add_argument('--transitions-stats', action='store_true', help='Show transitions stats on weekly basis and window of 4 weeks')
 
         # the idea here is to use something like print("format from user".format(**issue)) but needs to be validated by some real pythonist for security
         parser_query.add_argument('--outputformat', dest='output_format',
-                            help='Print output in the form given. Use str.format string with {key} or {field["duedate"]} syntax. Use --raw to see what keys exist.')
+                            help='Print output in the form given. Use str.format string with {key} or {fields[duedate]} syntax. Use --raw to see what keys exist.')
         parser_query.set_defaults(func=self.cmd_query)
 
         # new command
@@ -866,7 +906,7 @@ class EasyJira:
         parser_new.add_argument('--raw', action='store_true',
                             help='Display raw issue data (JSON)')
         parser_new.add_argument('--outputformat', dest='output_format',
-                            help='Print output in the form given. Use str.format string with {key} or {field["duedate"]} syntax. Use --json to see what keys exist.')
+                            help='Print output in the form given. Use str.format string with {key} or {fields["duedate"]} syntax. Use --json to see what keys exist.')
 
         # update command
         parser_update = subparsers.add_parser('update', help='update a JIRA issue')
@@ -899,7 +939,7 @@ class EasyJira:
         parser_clone.add_argument('--raw', action='store_true',
                             help='Display raw issue data (JSON)')
         parser_clone.add_argument('--outputformat', dest='output_format',
-                            help='Print output in the form given. Use str.format string with {key} or {field["duedate"]} syntax. Use --json to see what keys exist.')
+                            help='Print output in the form given. Use str.format string with {key} or {fields[duedate]} syntax. Use --json to see what keys exist.')
         parser_clone.add_argument('--copy_fields', metavar='field', type=str, nargs='+',
                                   help='Fields to be copied from the original issue, can be specified multiple times. If combined with --re, regular expression replacement will be applied for those fields.')
 
