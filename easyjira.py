@@ -206,6 +206,7 @@ class EasyJira:
         issue['fields']['errata_trackers'] = ' '.join(cves + bzs)
         issue['fields']['cves'] = ' '.join(cves)
         issue['fields']['labels_list'] = ' '.join(issue['fields']['labels'])
+        issue['fields']['status_text'] = issue['fields']['status']['name']
         if 'components' in issue['fields']:
             issue['fields']['components_list'] = ' '.join([n['name'] for n in issue['fields']['components']])
         if self.STORY_POINTS_FIELD in issue['fields'] and 'story_points' not in issue['fields']:
@@ -213,6 +214,24 @@ class EasyJira:
         if self._debug:
             pprint.pprint(issue['errata_trackers'])
             pprint.pprint(issue['errata_description'])
+        if self._program_args.status_as_of_date != 'now':
+            issue['fields']['status_as_of_date'] = self._get_status_as_of_date(issue, self._program_args.status_as_of_date)
+
+
+    def _get_status_as_of_date(self, issue, date):
+        # if asking for history before the issue is created, None is returned
+        if date < issue['fields']['created']:
+            return None
+        latest_timestamp = '0000-00-00'
+        # hack, correct would be to check "from" in status change,
+        # but counting on New being always the first status;
+        latest_status = 'New'
+        for entry in issue['changelog']['histories']:
+            for item in entry['items']:
+                if item['field'] == 'status' and entry['created'] > latest_timestamp and entry['created'] <= date:
+                    latest_timestamp = entry['created']
+                    latest_status = item['toString']
+        return latest_status
 
 
     def _print_issue(self, output_format, issue, log_api_if_required=True):
@@ -485,7 +504,7 @@ class EasyJira:
         Command handler for querying and printing issues.
         """
         # if asking for transition changelog, we must retrieve changelog
-        if args.transitions_changelog or args.transitions_stats:
+        if args.transitions_changelog or args.transitions_stats or args.status_as_of_date:
             if not args.expand:
                 args.expand = 'changelog'
             elif 'changelog' not in args.expand.split(','):
@@ -879,11 +898,12 @@ class EasyJira:
         parser_query.add_argument('--raw', action='store_true',
                             help='Display raw issue data (JSON)')
         parser_query.add_argument('--start_at', dest='start_at', default=0, help='Pagination, start at which item in the output of a single query')
-        parser_query.add_argument('--max_results', dest='max_results', default=self.DEFAULT_MAX_RESULTS, help='Pagination, how many items in the output of a single query, not counting individually requested IDs')
+        parser_query.add_argument('--max_results', dest='max_results', default=self.DEFAULT_MAX_RESULTS, type=int, help='Pagination, how many items in the output of a single query, not counting individually requested IDs')
         parser_query.add_argument('--auto_paginate', dest='auto_paginate', action='store_true', help='Use pagination automatically to read all results and fetch them repeatadly')
         parser_query.add_argument('--expand', help='Force expanding some fields, passed without check to REST API (?expand=...), typical values separated by a comma: transitions, changelog')
         parser_query.add_argument('--transitions-changelog', action='store_true', help='Show only transitions changelog as the output')
         parser_query.add_argument('--transitions-stats', action='store_true', help='Show transitions stats on weekly basis and window of 4 weeks')
+        parser_query.add_argument('--status_as_of_date', dest='status_as_of_date', default='now', help='Add an extra field status_as_of_date that will include status for the date given as an argument (format YYYY-MM-DD), default: now')
 
         # the idea here is to use something like print("format from user".format(**issue)) but needs to be validated by some real pythonist for security
         parser_query.add_argument('--outputformat', dest='output_format',
