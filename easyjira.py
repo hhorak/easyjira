@@ -31,6 +31,31 @@ class EasyJira:
         self.JIRA_REST_URL = f"{self.JIRA_PROJECTS_URL}/rest/api/2"
         self.DEFAULT_MAX_RESULTS = 20
         self.STORY_POINTS_FIELD = 'customfield_12310243'
+        # taken from fields-mapping output, can be extended
+        self.AUTO_CUSTOM_FIELDS = {
+             "customfield_12315948": "QA Contact",
+             "customfield_12310220": "Git Pull Request",
+             "customfield_12310940": "Sprint",
+             "customfield_12313941": "Target start",
+             "customfield_12313942": "Target end",
+             "customfield_12316142": "Severity",
+             "customfield_12316543": "Blocked",
+             "customfield_12317259": "Pool Team",
+             "customfield_12318141": "Dev Target Milestone",
+             "customfield_12318450": "Fixed in Build",
+             "customfield_12319940": "Target Version",
+             "customfield_12321040": "Internal Target Milestone",
+             "customfield_12321540": "Preliminary Testing",
+             "customfield_12321541": "Errata Link",
+             "customfield_12322141": "PX Technical Impact",
+             "customfield_12322148": "Dev Target end",
+             "customfield_12322244": "PX Impact Score",
+             "customfield_12323341": "Keywords",
+             "customfield_12324754": "Errata ID",
+             "customfield_12324940": "CVE Severity",
+             "customfield_12324748": "CVSS Score",
+             "customfield_12324749": "CVE ID",
+             }
         self.stats_window = 1
         self._token_path = os.path.expanduser("~/.config/jira/" + self.program_name)
         self._token = None
@@ -207,10 +232,24 @@ class EasyJira:
         issue['fields']['cves'] = ' '.join(cves)
         issue['fields']['labels_list'] = ' '.join(issue['fields']['labels'])
         issue['fields']['status_text'] = issue['fields']['status']['name']
+        issue['fields']['assignee_text'] = issue['fields']['assignee']['name'] if isinstance(issue['fields']['assignee'], dict) and 'name' in issue['fields']['assignee'] else None
         if 'components' in issue['fields']:
             issue['fields']['components_list'] = ' '.join([n['name'] for n in issue['fields']['components']])
         if self.STORY_POINTS_FIELD in issue['fields'] and 'story_points' not in issue['fields']:
             issue['fields']['story_points'] = issue['fields'][self.STORY_POINTS_FIELD]
+
+        # add some popular custom fields by its name to fields directly, use lowercase + underscore scheme
+        for custom_field_key in self.AUTO_CUSTOM_FIELDS:
+            custom_field_name = self.AUTO_CUSTOM_FIELDS[custom_field_key].lower().replace(' ', '_').replace('/', '_')
+            if custom_field_name not in issue['fields']:
+                if custom_field_key in issue['fields']:
+                    if isinstance(issue['fields'][custom_field_key], dict) and 'name' in issue['fields'][custom_field_key]:
+                        issue['fields'][custom_field_name] = issue['fields'][custom_field_key]['name']
+                    else:
+                        issue['fields'][custom_field_name] = issue['fields'][custom_field_key]
+                else:
+                    issue['fields'][custom_field_name] = ''
+
         if self._debug:
             pprint.pprint(issue['errata_trackers'])
             pprint.pprint(issue['errata_description'])
@@ -253,6 +292,8 @@ class EasyJira:
 
     def _print_raw_issues(self, issues):
         self._write_api_calls("json.dumps(issues, sort_keys=True, indent=4))")
+        for issue in issues:
+            self._add_composite_fields(issue)
         print(json.dumps(issues, sort_keys=True, indent=4))
 
 
