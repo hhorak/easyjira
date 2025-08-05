@@ -938,7 +938,7 @@ class EasyJira:
                             help='Use JQL query')
         parser_query.add_argument('--raw', action='store_true',
                             help='Display raw issue data (JSON)')
-        parser_query.add_argument('--start_at', dest='start_at', default=0, help='Pagination, start at which item in the output of a single query')
+        parser_query.add_argument('--start_at', dest='start_at', default=0, type=int, help='Pagination, start at which item in the output of a single query')
         parser_query.add_argument('--max_results', dest='max_results', default=self.DEFAULT_MAX_RESULTS, type=int, help='Pagination, how many items in the output of a single query, not counting individually requested IDs')
         parser_query.add_argument('--auto_paginate', dest='auto_paginate', action='store_true', help='Use pagination automatically to read all results and fetch them repeatadly')
         parser_query.add_argument('--expand', help='Force expanding some fields, passed without check to REST API (?expand=...), typical values separated by a comma: transitions, changelog')
