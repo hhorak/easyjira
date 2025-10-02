@@ -444,6 +444,21 @@ class EasyJira:
         return mapping
 
 
+    def _get_teams_for_issue(self, jira_id):
+        """
+        Retrieves the teams list for a specific issue (usable in RHEL* projects)
+        """
+        teams = {}
+        r = self._api_request('get', f"{self.JIRA_REST_URL}/issue/{jira_id}/editmeta?fields=customfield_12326540")
+        data = r.json()
+        try:
+            teams = { team['value']:team['id'] for team in data['fields']['customfield_12326540']['allowedValues'] }
+        except (KeyError, IndexError):
+            reason = 'unknown' if 'errorMessages' not in data else data['errorMessages'][0]
+            self._error(f'Data not found. It is possible that project {project} has no field customfield_12326540. Reason given by Jira: {reason}')
+        return teams
+
+
     def _get_fields_mapping_for_issue(self, jira_id, only_required=False):
         """
         Retrieves the field mapping for a specific issue type in a project.
@@ -579,7 +594,8 @@ class EasyJira:
             print(r.text)
             self._error('Issue NOT created.')
         new_issue = r.json()
-        # TODO: we can re-load the whole issue again to allow show other fields than key and id
+        # Re-load the whole issue again to allow show other fields than key and id
+        new_issue = self._get_issue(new_issue['key'], None)
         if args.output_format:
             # use codecs to interpret escape characters
             output_format = codecs.escape_decode(bytes(args.output_format, "utf-8"))[0].decode("utf-8")
@@ -730,7 +746,9 @@ class EasyJira:
 
         # get fields that must be replaced (whether they are replaced or not depends also on --re content)
         fields_for_replace = ['summary', 'description']
-        for field in ['project', 'issuetype']:
+        # customfield_12311140 is epic link
+        # customfield_12316142 is severity
+        for field in ['project', 'issuetype', 'duedate','priority', 'customfield_12311140', 'customfield_12316142']:
             if field not in input_fields:
                 fields_for_replace.append(field)
 
@@ -738,7 +756,20 @@ class EasyJira:
         for field in fields_for_replace + (args.copy_fields if args.copy_fields else []):
             input_fields[field] = self._replace_re(original_fields[field], field, args)
 
+        # we need some manual setting of teams
+        if 'AssignedTeam' in input_fields:
+            team_name = input_fields['AssignedTeam']
+            team_id = self._get_teams_for_issue(issue)[team_name]
+            del(input_fields['AssignedTeam'])
+            input_fields['customfield_12326540'] = {
+                "disabled": "false",
+                "id": str(team_id),
+                "self": "https://issues.redhat.com/rest/api/2/customFieldOption/{}".format(team_id),
+                "value": team_name
+            }
+
         clon_data = {'fields': input_fields}
+        #pprint.pprint(clon_data)
 
         # add a link to the original
         if not args.no_link_back:
