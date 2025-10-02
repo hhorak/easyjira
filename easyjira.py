@@ -722,7 +722,7 @@ class EasyJira:
         Clone an issue with some logic for keeping, changing and removing some specific fields.
         """
         issue = args.id
-        original = self._get_issue(issue)
+        original = self._get_issue(issue, None)
         original_fields = original['fields']
 
         # start with what is set explicitly by --set
