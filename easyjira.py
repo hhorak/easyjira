@@ -253,7 +253,7 @@ class EasyJira:
         if self._debug:
             pprint.pprint(issue['errata_trackers'])
             pprint.pprint(issue['errata_description'])
-        if self._program_args.status_as_of_date != 'now':
+        if hasattr(self._program_args, 'status_as_of_date') and self._program_args.status_as_of_date != 'now':
             issue['fields']['status_as_of_date'] = self._get_status_as_of_date(issue, self._program_args.status_as_of_date)
 
 
@@ -948,6 +948,9 @@ class EasyJira:
 
                   # Clone an issue and add a suffix to the summary
                   {program_name} clone  -j RHELPLAN-141789  --re '{"summary": {"pattern": "$", "replacement": " cloned"}}'
+
+                  # Clone one issue linked to an epic and assign it to a different team
+                  cat teams2clone | while read -r team ; do echo $team ; {program_name} clone -j RHELMISC-18238 --re "{\\"summary\\": {\\"pattern\\": \\"rhel-pt-pcp\\", \\"replacement\\": \\"$team\\"}}" --set "{\\"AssignedTeam\\": \\"$team\\"}" ; sleep 3 ; done
             ''')
         # do not expand anything else than the program name, complicated format
         # would make issues when using f-strings or .format()
