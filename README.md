@@ -11,7 +11,8 @@ Jira cmd-line tool that looks like python bugzilla
 ## Usage
 
 ```
-usage: easyjira [-h] [--show-api-calls] [--simulate] [--debug] {query,new,update,clone,move,fields-mapping,access} ...
+usage: easyjira [-h] [--show-api-calls] [--store-api-calls STORE_API_CALLS] [--simulate] [--debug]
+                {query,new,update,clone,move,fields-mapping,access} ...
 
 Work with JIRA from cmd-line like you liked doing it with python-bugzilla-cli.
 ------------------------------------------------------------------------------
@@ -77,6 +78,9 @@ Work with JIRA from cmd-line like you liked doing it with python-bugzilla-cli.
       # Clone an issue and add a suffix to the summary
       easyjira clone  -j RHELPLAN-141789  --re '{"summary": {"pattern": "$", "replacement": " cloned"}}'
 
+      # Clone one issue linked to an epic and assign it to a different team
+      cat teams2clone | while read -r team ; do echo $team ; easyjira clone -j RHELMISC-18238 --re "{\"summary\": {\"pattern\": \"rhel-pt-pcp\", \"replacement\": \"$team\"}}" --set "{\"AssignedTeam\": \"$team\"}" ; sleep 3 ; done
+
 positional arguments:
   {query,new,update,clone,move,fields-mapping,access}
                         commands
@@ -85,12 +89,16 @@ positional arguments:
     update              update a JIRA issue
     clone               clone a JIRA issue
     move                change a JIRA issue status
-    fields-mapping      show fields mapping for a project and issue type (shows only fields available when creating a new issue) or specific issue (shows all fields)
+    fields-mapping      show fields mapping for a project and issue type (shows only fields available when creating a new issue) or
+                        specific issue (shows all fields)
     access              verifies that the tool is able to access the server
 
 options:
   -h, --help            show this help message and exit
   --show-api-calls      Show what API calls the tool performed and with what input. The output is printed to stderr.
+  --store-api-calls STORE_API_CALLS
+                        Store what API calls the tool performed and with what input into a given file. The data are appeneded.
   --simulate            Do not proceed with any API calls.
   --debug               Show very verbose log of what the tool does.
+
 ```
