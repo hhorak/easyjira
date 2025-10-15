@@ -747,8 +747,8 @@ class EasyJira:
         # get fields that must be replaced (whether they are replaced or not depends also on --re content)
         fields_for_replace = ['summary', 'description']
         # customfield_12311140 is epic link
-        # customfield_12316142 is severity
-        for field in ['project', 'issuetype', 'duedate','priority', 'customfield_12311140', 'customfield_12316142']:
+        # customfield_12316142 is severity, but not added actually as it's not available for creation for RHEL project for example, use --copy_fields customfield_12316142 instead
+        for field in ['project', 'issuetype', 'duedate','priority', 'customfield_12311140']:
             if field not in input_fields:
                 fields_for_replace.append(field)
 
