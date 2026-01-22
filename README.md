@@ -3,10 +3,14 @@ Jira cmd-line tool that looks like python bugzilla
 
 ## Jira Token
 - Jira token can be obtained by opening your Jira profile in the "Personal Access Tokens" section
-- Token can be supplied in 2 ways:
+- Token can be supplied in 3 ways:
+  - In python keyring for service https://issues.redhat.com and username token
   - In a file inside your home folder: `$HOME/.config/jira/easyjira`
   - Saved in an environment variable `JIRA_TOKEN=<TOKEN>`
 - Provide only the token string and nothing else (your email or any other information is not needed)
+
+Use ``easyjira access --configure [--keyring]`` for simple configuration.
+Use ``python -m keyring.cli`` to manage the keyring.
 
 ## Usage
 
