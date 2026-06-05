@@ -105,19 +105,75 @@ class EasyJira:
             print(message)
 
 
+    def _validate_credentials(self, email, token):
+        errors = []
+        warnings = []
+        if not email or '@' not in email:
+            errors.append(f"email address looks invalid: '{email}'")
+
+        if not token:
+            errors.append('API token is empty')
+        elif token != token.strip():
+            warnings.append('API token has leading or trailing whitespace')
+
+        return errors, warnings
+
+
+    def _log_credentials_info(self, email, token, source):
+        self._debug_print(f'Credentials source: {source}')
+        self._debug_print(f'Email: {email}')
+        self._debug_print(f'API token length: {len(token)} characters')
+        if os.path.exists(self._token_path):
+            file_mode = oct(os.stat(self._token_path).st_mode & 0o777)
+            self._debug_print(f'Credentials file mode: {file_mode}')
+        errors, warnings = self._validate_credentials(email, token)
+        for message in errors:
+            self._debug_print(f'Credentials error: {message}')
+        for message in warnings:
+            self._debug_print(f'Credentials warning: {message}')
+        return errors, warnings
+
+
+    def _format_api_error(self, response):
+        parts = [f'HTTP {response.status_code} {response.reason}']
+        if response.status_code == 401:
+            parts.append('authentication failed; verify email and API token')
+        elif response.status_code == 403:
+            parts.append('access forbidden; token may lack permissions or the issue may be restricted')
+        elif response.status_code == 404:
+            parts.append('resource not found; verify Jira URL and issue key')
+        try:
+            data = response.json()
+            if data.get('errorMessages'):
+                parts.append('; '.join(data['errorMessages']))
+            elif 'message' in data:
+                parts.append(data['message'])
+        except json.JSONDecodeError:
+            if response.text:
+                parts.append(response.text[:300])
+        return ' — '.join(parts)
+
+
     def _get_credentials(self) -> tuple:
         """Retrieves the Atlassian account email and API token from various sources."""
         if self._credentials:
             return self._credentials
         raw = None
+        source = None
         try:
             raw = self._get_file_content(self._token_path).strip()
+            source = f'credentials file {self._token_path}'
+            self._debug_print(f'Reading credentials from {self._token_path}')
         except FileNotFoundError:
             print(f'Configuration file {self._token_path} not found, one more attempt will be tried by reading JIRA_TOKEN environment variable, but storing it in a file with properly restrictive permissions might be safer.')
+            self._debug_print(f'Credentials file {self._token_path} not found')
             try:
                 raw = os.environ['JIRA_TOKEN']
+                source = 'JIRA_TOKEN environment variable'
+                self._debug_print('Reading API token from JIRA_TOKEN environment variable')
             except KeyError:
                 print("JIRA_TOKEN environment variable missing")
+                self._debug_print('JIRA_TOKEN environment variable is not set')
 
         if raw is None:
             self._error(f'All attempts to get JIRA credentials failed. Create an API token in the Jira web interface (Profile -> Security -> API tokens) and save email:api_token into a file located at {self._token_path} with properly restricted access (preferred), or set JIRA_EMAIL and JIRA_TOKEN environment variables.')
@@ -126,14 +182,26 @@ class EasyJira:
             email, token = raw.split(':', 1)
             if '@' in email:
                 self._credentials = (email, token)
+                errors, warnings = self._log_credentials_info(email, token, source)
+                if errors:
+                    self._error('Invalid credentials: ' + '; '.join(errors))
+                for message in warnings:
+                    self._warning(message)
                 return self._credentials
 
+        self._debug_print('Credentials file/token does not contain email:api_token format, trying JIRA_EMAIL environment variable')
         try:
             email = os.environ['JIRA_EMAIL']
+            source = f'{source}, email from JIRA_EMAIL environment variable'
         except KeyError:
             self._error(f'Atlassian Cloud requires your email address for API authentication. Store credentials as email:api_token in {self._token_path}, or set JIRA_EMAIL and JIRA_TOKEN environment variables.')
 
         self._credentials = (email, raw)
+        errors, warnings = self._log_credentials_info(email, raw, source)
+        if errors:
+            self._error('Invalid credentials: ' + '; '.join(errors))
+        for message in warnings:
+            self._warning(message)
         return self._credentials
 
 
@@ -874,10 +942,38 @@ class EasyJira:
                     self._error(f'Comment not added to the tissue {issue}.')
 
 
+    def _verify_access(self):
+        test_issue = 'RHELPLAN-141790'
+        url = f"{self.JIRA_REST_URL}/issue/{test_issue}"
+        self._get_credentials()
+        self._debug_print(f'Access check target: {self.JIRA_PROJECTS_URL}')
+        self._debug_print(f'Access check issue: {test_issue}')
+        self._debug_print(f'Access check request: GET {url}')
+        response = requests.get(url, headers=self._get_headers())
+        self._debug_print(f'Access check response: HTTP {response.status_code} {response.reason}')
+
+        if not response.ok:
+            self._error(f'Access check failed: {self._format_api_error(response)}')
+
+        try:
+            data = response.json()
+        except json.JSONDecodeError:
+            self._error(f'Access check failed: response is not JSON: {response.text[:300]}')
+
+        if data.get('errorMessages'):
+            self._error(f"Access check failed: Jira returned: {'; '.join(data['errorMessages'])}")
+
+        if data.get('key') != test_issue:
+            got_key = data.get('key', '<missing>')
+            self._error(f"Access check failed: read {test_issue} but got issue key '{got_key}'")
+
+        return data
+
+
     def cmd_access(self, args):
         """
-        Checks access to the server by reading a known to exist issue and
-        verifying the returned value includes what it should.
+        Checks access to the server by reading a known issue and
+        verifying the returned issue key matches.
         """
         if args.configure:
             token_dir = os.path.dirname(self._token_path)
@@ -891,13 +987,17 @@ class EasyJira:
             email = input().strip()
             print(f'Provide an API token created through Jira WebUI that will be stored to {self._token_path}:', flush=True)
             token = getpass.getpass()
+            errors, warnings = self._validate_credentials(email, token)
+            if errors:
+                self._error('Invalid credentials: ' + '; '.join(errors))
+            for message in warnings:
+                self._warning(message)
             with open(self._token_path, "w") as f:
                 f.write(f'{email}:{token}')
             self._credentials = (email, token)
+            self._log_credentials_info(email, token, f'interactive configure to {self._token_path}')
 
-        issues = self._get_issues(ids=['RHELPLAN-141790'])
-        if len(issues) < 1 or 'id' not in issues[0] or issues[0]['id'] != '14977200':
-            self._error('Failure: Access does not look good, at least reading RHELPLAN-141790 did not succeed.')
+        self._verify_access()
         print(f'Access to the server {self.JIRA_PROJECTS_URL} looks good.')
 
 
