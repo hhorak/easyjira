@@ -58,6 +58,9 @@ class EasyJira:
              "customfield_12324749": "CVE ID",
              }
         self.stats_window = 1
+        # Credentials file (~/.config/jira/easyjira): one line, email:api_token
+        # Example: user@redhat.com:ATATT3xFfGF0...
+        # Alternative: put only the api_token in the file and set JIRA_EMAIL in the environment.
         self._token_path = os.path.expanduser("~/.config/jira/" + self.program_name)
         self._credentials = None
         self._program_args = None
