@@ -63,7 +63,7 @@ def test_query(capsys):
     with pytest.raises(SystemExit):
         rj.main(fake_args=['--simulate', 'query', '-j', 'RHELPLAN-142726'])
     captured = capsys.readouterr()
-    assert 'requests.get("https://issues.redhat.com/rest/api/2/issue/RHELPLAN-142726"' in captured.err
+    assert 'requests.get("https://redhat.atlassian.net/rest/api/2/issue/RHELPLAN-142726"' in captured.err
     assert 'params = None' in captured.err
 
 
@@ -72,7 +72,7 @@ def test_query2(capsys):
     with pytest.raises(SystemExit):
         rj.main(fake_args=['--simulate', 'query', '--jql', 'reporter = currentUser() order by created DESC'])
     captured = capsys.readouterr()
-    assert 'requests.get("https://issues.redhat.com/rest/api/2/search"' in captured.err
+    assert 'requests.get("https://redhat.atlassian.net/rest/api/2/search"' in captured.err
     assert 'params = "jql=reporter+%3D+currentUser' in captured.err
 
 
@@ -81,10 +81,10 @@ def test_move(capsys):
     with pytest.raises(SystemExit):
         rj.main(fake_args=['--simulate', 'move', '--status', 'Closed', '--resolution', 'Done', '--comment', 'closing', '-j', 'RHELPLAN-138763'])
     captured = capsys.readouterr()
-    assert 'requests.get("https://issues.redhat.com/rest/api/2/issue/RHELPLAN-138763/transitions' in captured.err
+    assert 'requests.get("https://redhat.atlassian.net/rest/api/2/issue/RHELPLAN-138763/transitions' in captured.err
     assert 'params = None' in captured.err
     assert "json = \"{'transition': {'id': '221'}, 'fields': {'resolution': {'name': 'Done'}}}\"" in captured.err
-    assert 'response = requests.post("https://issues.redhat.com/rest/api/2/issue/RHELPLAN-138763/transitions", json=json' in captured.err
+    assert 'response = requests.post("https://redhat.atlassian.net/rest/api/2/issue/RHELPLAN-138763/transitions", json=json' in captured.err
 
 
 def test_doc_query(capsys):

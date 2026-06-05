@@ -23,7 +23,7 @@ RHELPLAN-10002
 [,python]
 ----
 params = "jql=project%3DRHELPLAN&maxResults=100&startAt=200"
-response = requests.get("https://issues.redhat.com/rest/api/2/search", params=params, headers=headers)
+response = requests.get("https://redhat.atlassian.net/rest/api/2/search", params=params, headers=headers)
 pprint.pprint(response.json())
 ----
 

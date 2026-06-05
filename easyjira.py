@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import base64
 import os
 import requests
 import sys
@@ -27,7 +28,7 @@ class FakeResponse:
 class EasyJira:
     def __init__(self):
         self.program_name = 'easyjira'
-        self.JIRA_PROJECTS_URL = "https://issues.redhat.com"
+        self.JIRA_PROJECTS_URL = "https://redhat.atlassian.net"
         self.JIRA_REST_URL = f"{self.JIRA_PROJECTS_URL}/rest/api/2"
         self.DEFAULT_MAX_RESULTS = 20
         self.STORY_POINTS_FIELD = 'customfield_12310243'
@@ -58,7 +59,7 @@ class EasyJira:
              }
         self.stats_window = 1
         self._token_path = os.path.expanduser("~/.config/jira/" + self.program_name)
-        self._token = None
+        self._credentials = None
         self._program_args = None
         self._default_output = "{key}"
         self._log_headers_done = False
@@ -101,24 +102,36 @@ class EasyJira:
             print(message)
 
 
-    def _get_token(self) -> str:
-        """Retrieves the JIRA token from various sources."""
-        if self._token:
-            return self._token
+    def _get_credentials(self) -> tuple:
+        """Retrieves the Atlassian account email and API token from various sources."""
+        if self._credentials:
+            return self._credentials
+        raw = None
         try:
-            self._token = self._get_file_content(self._token_path).strip()
-            return self._token
+            raw = self._get_file_content(self._token_path).strip()
         except FileNotFoundError:
             print(f'Configuration file {self._token_path} not found, one more attempt will be tried by reading JIRA_TOKEN environment variable, but storing it in a file with properly restrictive permissions might be safer.')
+            try:
+                raw = os.environ['JIRA_TOKEN']
+            except KeyError:
+                print("JIRA_TOKEN environment variable missing")
+
+        if raw is None:
+            self._error(f'All attempts to get JIRA credentials failed. Create an API token in the Jira web interface (Profile -> Security -> API tokens) and save email:api_token into a file located at {self._token_path} with properly restricted access (preferred), or set JIRA_EMAIL and JIRA_TOKEN environment variables.')
+
+        if '@' in raw and ':' in raw:
+            email, token = raw.split(':', 1)
+            if '@' in email:
+                self._credentials = (email, token)
+                return self._credentials
 
         try:
-            self._token = os.environ['JIRA_TOKEN']
-            return self._token
+            email = os.environ['JIRA_EMAIL']
         except KeyError:
-            print("JIRA_TOKEN environment variable missing")
+            self._error(f'Atlassian Cloud requires your email address for API authentication. Store credentials as email:api_token in {self._token_path}, or set JIRA_EMAIL and JIRA_TOKEN environment variables.')
 
-        self._error(f'All attempts to get a JIRA token failed. Create one in the Jira web interface (see your Profile section) and save only the token string into a file located at {self._token_path} with properly restricted access (preferred), or set it into the JIRA_TOKEN environment variable.')
-        return None
+        self._credentials = (email, raw)
+        return self._credentials
 
 
     def _write_api_calls(self, data):
@@ -143,12 +156,13 @@ class EasyJira:
 
     def _get_auth_data(self) -> dict:
         """
-        Retrieves authentication data including headers with the JIRA token.
+        Retrieves authentication data including headers with the JIRA API token.
         """
-        token = self._get_token()
+        email, token = self._get_credentials()
+        credentials = base64.b64encode(f'{email}:{token}'.encode()).decode()
         auth = {
                 "Accept": "application/json",
-                "Authorization": "Bearer {token}"
+                "Authorization": "Basic {credentials}"
                }
         if not self._log_headers_done:
             self._write_api_calls('#!/usr/bin/env python3')
@@ -156,8 +170,8 @@ class EasyJira:
             self._write_api_calls('import requests, pprint')
             self._write_api_calls(self._log_arg('headers', auth))
             self._log_headers_done = True
-        # replace the token string after the header is logged to not leak token
-        auth["Authorization"] = auth["Authorization"].format(token=token)
+        # replace credentials after the header is logged to not leak the token
+        auth["Authorization"] = auth["Authorization"].format(credentials=credentials)
         return auth
 
 
@@ -764,7 +778,7 @@ class EasyJira:
             input_fields['customfield_12326540'] = {
                 "disabled": "false",
                 "id": str(team_id),
-                "self": "https://issues.redhat.com/rest/api/2/customFieldOption/{}".format(team_id),
+                "self": "{}/customFieldOption/{}".format(self.JIRA_REST_URL, team_id),
                 "value": team_name
             }
 
@@ -833,7 +847,7 @@ class EasyJira:
     def cmd_move(self, args):
         """
         Move an issue to a different status with some comment and resolution if exists for the target status.
-        This requires transition id probably: https://issues.redhat.com/rest/api/2/issue/RHELPLAN-141790/transitions?expand=transitions.fields
+        This requires transition id probably: https://redhat.atlassian.net/rest/api/2/issue/RHELPLAN-141790/transitions?expand=transitions.fields
         https://community.atlassian.com/t5/Jira-questions/Close-Jira-Issue-via-REST-API/qaq-p/1845399
         """
         if (args.comment and args.comment_file):
@@ -870,10 +884,13 @@ class EasyJira:
                 s = os.stat(token_dir)
                 if s.st_mode & 0o777 != 0o700:
                     self._error(f'Diretory {token_dir} must have 0700 permissions, so nobody else than the owner can read it')
-            print(f'Provide a token created through Jira WebUI that will be stored to {self._token_path}:', flush=True)
-            self._token = getpass.getpass()
+            print(f'Provide your Atlassian account email: ', end='', flush=True)
+            email = input().strip()
+            print(f'Provide an API token created through Jira WebUI that will be stored to {self._token_path}:', flush=True)
+            token = getpass.getpass()
             with open(self._token_path, "w") as f:
-                f.write(self._token)
+                f.write(f'{email}:{token}')
+            self._credentials = (email, token)
 
         issues = self._get_issues(ids=['RHELPLAN-141790'])
         if len(issues) < 1 or 'id' not in issues[0] or issues[0]['id'] != '14977200':
@@ -902,7 +919,7 @@ class EasyJira:
 
                 Examples:
                   {program_name} query --jql 'project = RHELPLAN' --max_results 100 --start_at 200
-                  {program_name} query --from-url 'https://issues.redhat.com/issues/?jql=project%20%3D%20%22RHEL%20Planning%22%20and%20issueLinkType%20%3D%20clones%20'
+                  {program_name} query --from-url 'https://redhat.atlassian.net/issues/?jql=project%20%3D%20%22RHEL%20Planning%22%20and%20issueLinkType%20%3D%20clones%20'
                   {program_name} query --jql 'parent = RHELPLAN-138763' --outputformat '{key}'
                   {program_name} --simulate query --jql 'filter=12363088'
 
